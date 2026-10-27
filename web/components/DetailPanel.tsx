@@ -14,20 +14,23 @@ interface Props {
   point: PointResult | null | "loading" | "error";
   lang: string;
   onClose: () => void;
-  current?: string | null;                 // layer on the map: its group opens, its row is marked
-  onLayer?: (id: string) => void;          // click a value to show that layer
+  current?: string | null;                 // base on the map: its group opens, its row is marked
+  period?: string | null;                  // values shown are this period's
+  onLayer?: (base: string) => void;        // click a value to show that layer
 }
 
 const ADVISORY = "advisory_class";
 
-export default function DetailPanel({ run, selection, area, parents, levelLabel, point, lang, onClose, current, onLayer }: Props) {
+export default function DetailPanel({ run, selection, area, parents, levelLabel, point, lang, onClose, current, period, onLayer }: Props) {
   const isArea = selection.kind === "area" && area;
   const pt = typeof point === "object" ? point : null;
   const value = (id: string): number | null =>
     isArea ? areaNumber(area!.values[id] ?? null) : pt ? pt.layers[id] ?? null : null;
 
-  const adv = run.layers[ADVISORY];
-  const advValue = value(ADVISORY);
+  const lid = (b: string) => (period && run.index?.[b]?.[period]) || null;
+  const advId = lid(ADVISORY);           // only when this period has an advisory
+  const adv = advId ? run.layers[advId] : undefined;
+  const advValue = advId ? value(advId) : null;
   const advClass = adv?.legend?.classes?.find((c) => c.value === advValue);
   const advText = adv?.advisories && advValue != null ? adv.advisories[String(advValue)] : null;
 
@@ -52,8 +55,8 @@ export default function DetailPanel({ run, selection, area, parents, levelLabel,
         <section className="advisory" style={{ ["--adv" as string]: advClass.color }}>
           <p className="advisory-class">{tx(advClass.label, lang)}</p>
           {advText ? <p className="advisory-text">{tx(advText, lang)}</p> : null}
-          {isArea && area!.values[ADVISORY] && "share" in area!.values[ADVISORY]! ? (
-            <ShareBar share={(area!.values[ADVISORY] as { share: Record<string, number> }).share} layer={adv} lang={lang} />
+          {isArea && advId && area!.values[advId] && "share" in area!.values[advId]! ? (
+            <ShareBar share={(area!.values[advId] as { share: Record<string, number> }).share} layer={adv!} lang={lang} />
           ) : null}
         </section>
       ) : null}
@@ -61,7 +64,7 @@ export default function DetailPanel({ run, selection, area, parents, levelLabel,
       {!outside && (isArea || pt) ? (
         <div className="value-groups">
           {run.groups.map((g) => {
-            const ids = g.layers.filter((id) => id !== ADVISORY && run.layers[id]);
+            const ids = g.layers.filter((b) => b !== ADVISORY && lid(b));
             if (!ids.length) return null;
             const here = g.layers.includes(current ?? "") || run.groups.length === 1;
             return (
@@ -72,7 +75,8 @@ export default function DetailPanel({ run, selection, area, parents, levelLabel,
                   <span className="group-count">{ids.length}</span>
                 </summary>
                 <dl className="values">
-                  {ids.map((id) => {
+                  {ids.map((b) => {
+                    const id = lid(b)!;
                     const l = run.layers[id];
                     const v = value(id);
                     const c = colorFor(v, l.legend);
@@ -83,9 +87,9 @@ export default function DetailPanel({ run, selection, area, parents, levelLabel,
                       </>
                     );
                     return onLayer ? (
-                      <div key={id} className={`value-row is-link${id === current ? " is-on" : ""}`} role="button" tabIndex={0}
-                           aria-current={id === current} onClick={() => onLayer(id)}
-                           onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onLayer(id); } }}>
+                      <div key={id} className={`value-row is-link${b === current ? " is-on" : ""}`} role="button" tabIndex={0}
+                           aria-current={b === current} onClick={() => onLayer(b)}
+                           onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onLayer(b); } }}>
                         {label}
                       </div>
                     ) : <div key={id} className="value-row">{label}</div>;
@@ -98,7 +102,8 @@ export default function DetailPanel({ run, selection, area, parents, levelLabel,
       ) : null}
       {isArea ? <p className="muted small">{t(lang, "areaAverage")}</p> : null}
 
-      {pt && pt.inside ? <MemberChart point={pt} lang={lang} /> : null}
+      {/* member totals are for the whole forecast window */}
+      {pt && pt.inside && (!period || period === "full") ? <MemberChart point={pt} lang={lang} /> : null}
     </aside>
   );
 }

@@ -207,6 +207,12 @@ button { cursor: pointer; }
 .group-card.is-open .group-chev { transform: none; }
 .layer-text { display: grid; gap: 2px; min-width: 0; }
 .layer-desc { font-weight: 400; font-size: 12.5px; color: var(--ink-2); line-height: 1.4; }
+.layer-option.is-elsewhere { color: var(--ink-2); }
+.layer-option.is-elsewhere::before { border-style: dashed; }
+.layer-periods { font-size: 11.5px; font-weight: 600; color: var(--accent); }
+.group-head.is-dim .group-name { color: var(--ink-2); }
+.preview-note { margin-top: 10px !important; padding: 8px 10px; border-radius: 10px; font-size: 12.5px !important;
+  background: rgba(242, 211, 138, 0.16); border: 1px solid rgba(242, 211, 138, 0.35); color: var(--gold) !important; }
 .group-icon { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center;
   background: var(--primary-soft); color: var(--primary-dark); }
 .group-options { display: grid; gap: 1px; padding: 0 6px; }
@@ -309,6 +315,23 @@ button { cursor: pointer; }
 .showby button { border: 0; background: transparent; padding: 7px 14px; border-radius: 10px; white-space: nowrap; color: var(--ink); }
 .showby button:hover { background: var(--surface-2); }
 .showby button.is-on { background: var(--primary); color: #fff; font-weight: 700; }
+
+/* period selector: seasons | months | whole forecast */
+.period-bar { position: absolute; top: 66px; left: 140px; z-index: 6; display: flex; align-items: center;
+  background: var(--frost); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); padding: 4px;
+  max-width: calc(100% - 156px); backdrop-filter: blur(8px); }
+.stage:has(.detail) .period-bar { max-width: calc(100% - 156px - 416px); }
+.period-title { font-size: 13px; color: var(--ink-2); padding: 0 8px; white-space: nowrap; }
+.period-pills { display: flex; align-items: center; overflow-x: auto; scrollbar-width: none; min-width: 0; }
+.period-pills::-webkit-scrollbar { display: none; }
+.period-set { display: flex; gap: 2px; padding: 0 4px; }
+.period-set + .period-set { border-left: 1px solid var(--line); }
+.period-set button { border: 0; background: transparent; padding: 6px 11px; border-radius: 10px; white-space: nowrap;
+  color: var(--ink); font-size: 14px; display: inline-flex; align-items: baseline; gap: 6px; }
+.period-set button:hover { background: var(--surface-2); }
+.period-set button.is-on { background: var(--accent); color: #1f1a0e; font-weight: 800; }
+.period-set button small { font-size: 11px; font-weight: 700; letter-spacing: 0.04em; opacity: 0.7; }
+.period-set.is-season button { font-weight: 700; }
 
 .legend-dock { position: absolute; left: 16px; bottom: 44px; z-index: 6; width: 344px; max-width: calc(100% - 32px); }
 .legend-card { background: var(--frost); border: 1px solid var(--line); border-radius: var(--r); box-shadow: var(--shadow); backdrop-filter: blur(8px); }
@@ -426,7 +449,10 @@ button { cursor: pointer; }
   .app.is-mobile-open .side-body { display: block; }
   .stage { min-height: 58dvh; }
   .map-controls { top: 10px; left: 10px; }
-  .showby, .stage:has(.detail) .showby { top: 10px; left: 136px; right: 10px; max-width: none; }
+  .ctl-stack { display: none; }                     /* phones pinch to zoom; frees the top-left for the bars */
+  .showby, .stage:has(.detail) .showby { top: 10px; left: 96px; right: 10px; max-width: none; }
+  .period-bar, .stage:has(.detail) .period-bar { top: 58px; left: 10px; right: 10px; max-width: none; }
+  .period-title { display: none; }
   .legend-dock { left: 10px; bottom: 36px; right: 10px; width: auto; }
   .stage:has(.detail) .legend-dock { display: none; }
   .layer-pop { max-height: 46dvh; }

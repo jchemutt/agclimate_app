@@ -16,7 +16,8 @@ import Legend from "./Legend";
 import MapControls from "./MapControls";
 import DetailPanel, { findArea } from "./DetailPanel";
 import { GroupIcon } from "./icons";
-import { groupOf, stepLayer } from "@/lib/layers";
+import { availableIn, groupOf, layerIdFor, menuOrder, periodsOf, shownBase, stepLayer } from "@/lib/layers";
+import PeriodBar from "./PeriodBar";
 import OutlookPanel from "./sidebar/OutlookPanel";
 import AreasPanel from "./sidebar/AreasPanel";
 import DataPanel from "./sidebar/DataPanel";
@@ -26,7 +27,7 @@ const MapView = dynamic(() => import("./MapView"), { ssr: false, loading: () => 
 const GRID = "grid";
 type Tab = "outlook" | "areas" | "data";
 
-interface Query { lang: string | null; run: string | null; layer: string | null; by: string | null }
+interface Query { lang: string | null; run: string | null; layer: string | null; by: string | null; period?: string | null }
 
 export default function Dashboard({ country, query: q }: { country: string; query: Query }) {
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -35,7 +36,8 @@ export default function Dashboard({ country, query: q }: { country: string; quer
   const [error, setError] = useState<"missing" | "nodata" | "failed" | null>(null);
   const [lang, setLang] = useState<string>(q.lang ?? "");
   const [init, setInit] = useState<string>(q.run ?? "latest");
-  const [layerId, setLayerId] = useState<string | null>(q.layer);
+  const [layerId, setLayerId] = useState<string | null>(q.layer);     // chosen indicator (base)
+  const [period, setPeriod] = useState<string | null>(q.period ?? null);
   const [by, setBy] = useState<string | null>(q.by);
   const [summaries, setSummaries] = useState<Record<string, AreaSummary>>({});
   const [selection, setSelection] = useState<Selection | null>(null);
@@ -65,14 +67,18 @@ export default function Dashboard({ country, query: q }: { country: string; quer
     api.run(country, init).then((r) => {
       setRun(r);
       setError(null);
-      setLayerId((id) => (id && r.layers[id] ? id : r.default_layer));
+      setPeriod((pid) => (pid && r.periods.some((x) => x.id === pid) ? pid : r.default_period));
+      setLayerId((id) => (id && r.index?.[id] ? id : null));     // null: the period's preferred default
       setBy((b) => (b === GRID || r.areas.some((a) => a.level === b) ? b : r.areas[0]?.level ?? GRID));
       setAreasLevel((l) => (l && r.areas.some((a) => a.level === l) ? l : r.areas[0]?.level ?? null));
     }).catch((e) => setError((prev) => (prev === "missing" ? prev : e.status === 404 ? "nodata" : "failed")));
   }, [country, init]);
 
   const level = run?.areas.find((a) => a.level === by) ?? null;
-  const layer = run && layerId ? run.layers[layerId] ?? null : null;
+  const base = run ? shownBase(run, layerId, period) : null;          // what the period can show
+  const layerKey = run ? layerIdFor(run, base, period) : null;
+  const layer = run && layerKey ? run.layers[layerKey] ?? null : null;
+  const sumKey = (lv: string) => `${run?.init}/${period}/${lv}`;
 
   // area summaries: the shown level, the Areas-tab level, and levels above a selection (parent names)
   useEffect(() => {
@@ -86,12 +92,13 @@ export default function Dashboard({ country, query: q }: { country: string; quer
     if (tab === "areas") upTo(areasLevel);
     if (selection?.kind === "area") upTo(selection.level);
     want.forEach((lv) => {
-      const key = `${run.init}/${lv}`;
+      const key = `${run.init}/${period}/${lv}`;
       const a = run.areas.find((x) => x.level === lv);
-      if (summaries[key] || !a) return;
-      api.areas(a.summary_url).then((s) => setSummaries((m) => ({ ...m, [key]: s }))).catch(() => undefined);
+      if (summaries[key] || !a || !period) return;
+      const url = a.summary_urls?.[period] ?? a.summary_url;
+      api.areas(url).then((s) => setSummaries((m) => ({ ...m, [key]: s }))).catch(() => undefined);
     });
-  }, [run, level, selection, summaries, tab, areasLevel]);
+  }, [run, period, level, selection, summaries, tab, areasLevel]);
 
   // point values for the selection
   useEffect(() => {
@@ -111,12 +118,13 @@ export default function Dashboard({ country, query: q }: { country: string; quer
     if (!run) return;
     const u = new URLSearchParams();
     if (init !== "latest") u.set("run", init);
-    if (layerId && layerId !== run.default_layer) u.set("layer", layerId);
+    if (period && period !== run.default_period) u.set("period", period);
+    if (layerId) u.set("layer", layerId);
     if (by) u.set("by", by);
     if (profile && lang && lang !== profile.default_language) u.set("lang", lang);
     const s = u.toString();
     window.history.replaceState(null, "", s ? `?${s}` : window.location.pathname);
-  }, [run, init, layerId, by, lang, profile]);
+  }, [run, init, period, layerId, by, lang, profile]);
 
   const chooseLang = useCallback((l: string) => {
     setLang(l);
@@ -132,29 +140,37 @@ export default function Dashboard({ country, query: q }: { country: string; quer
   const L = lang || profile?.default_language || "en";
 
 
-  const summary = run && level ? summaries[`${run.init}/${level.level}`] ?? null : null;
-  const areasSummary = run && areasLevel ? summaries[`${run.init}/${areasLevel}`] ?? null : null;
-  const selArea = selection?.kind === "area" && run ? findArea(summaries[`${run.init}/${selection.level}`] ?? null, selection.id) : null;
+  const summary = run && level ? summaries[sumKey(level.level)] ?? null : null;
+  const areasSummary = run && areasLevel ? summaries[sumKey(areasLevel)] ?? null : null;
+  const selArea = selection?.kind === "area" && run ? findArea(summaries[sumKey(selection.level)] ?? null, selection.id) : null;
   const parents: string[] = [];
   if (selArea && run && selection?.kind === "area") {
     let pid = selArea.parent_id;
     const selLevel = selection.level;
     for (let i = run.areas.findIndex((a) => a.level === selLevel) - 1; i >= 0 && pid; i--) {
-      const rec = findArea(summaries[`${run.init}/${run.areas[i].level}`] ?? null, pid);
+      const rec = findArea(summaries[sumKey(run.areas[i].level)] ?? null, pid);
       if (!rec) break;
       parents.push(rec.name);
       pid = rec.parent_id;
     }
   }
   const selLevelLabel = selection?.kind === "area" ? tx(run?.areas.find((a) => a.level === selection.level)?.label, L) : "";
-  const group = run ? groupOf(run, layerId) : null;
+  const group = run ? groupOf(run, base) : null;
   const groupIcon = group?.icon ?? null;
-  const position: [number, number] | undefined = group && layerId
-    ? [group.layers.filter((id) => run?.layers[id]).indexOf(layerId) + 1, group.layers.filter((id) => run?.layers[id]).length]
-    : undefined;
+  const inGroup = group && run ? group.layers.filter((b) => availableIn(run, b, period)) : [];
+  const position: [number, number] | undefined = group && base ? [inGroup.indexOf(base) + 1, inGroup.length] : undefined;
   const step = useCallback((d: number) => {
-    if (run) setLayerId((id) => stepLayer(run, id, d) ?? id);
-  }, [run]);
+    if (run) setLayerId((id) => stepLayer(run, shownBase(run, id, period), period, d) ?? id);
+  }, [run, period]);
+  /** Choose an indicator; if this period doesn't have it, move to the first period that does. */
+  const choose = useCallback((b: string) => {
+    if (!run) return;
+    setLayerId(b);
+    if (!availableIn(run, b, period)) {
+      const first = periodsOf(run, b)[0];
+      if (first) setPeriod(first.id);
+    }
+  }, [run, period]);
   // "[" and "]" step through the layers from anywhere except form fields
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -168,11 +184,14 @@ export default function Dashboard({ country, query: q }: { country: string; quer
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [step]);
-  /** Rail shortcut: keep the current layer if it's in the group, else the group's first layer. */
+  /** Rail shortcut: keep the current layer if it's in the group, else the group's first layer
+   *  for this period (or its first layer anywhere, switching period). */
   const pickGroup = (gid: string) => {
     const g = run?.groups.find((x) => x.id === gid);
-    const first = g?.layers.find((id) => run?.layers[id]);
-    if (g && first) setLayerId((id) => (id && g.layers.includes(id) ? id : first));
+    if (!run || !g) return;
+    if (base && g.layers.includes(base)) return;
+    const first = run && menuOrder(run, period).find((x) => x.group.id === gid)?.base;
+    choose(first ?? g.layers[0]);
   };
 
   if (error === "missing") return <Message lang={L} text={t(L, "countryMissing")} />;
@@ -255,6 +274,7 @@ export default function Dashboard({ country, query: q }: { country: string; quer
                 <h1>{tx(run.season.label, L)} {run.init.slice(0, 4)}</h1>
                 <p>{fmtDate(run.valid_from, L)} – {fmtDate(run.valid_to, L)}</p>
                 <p className="season-meta">{t(L, "issued")} {fmtDate((run.created ?? run.init).slice(0, 10), L)}, {run.members} {t(L, "members")}</p>
+                {run.preview ? <p className="preview-note">{t(L, "previewNote")}</p> : null}
                 {runs.length > 1 ? (
                   <label className="run-pick">
                     <span>{t(L, "forecastRun")}</span>
@@ -283,14 +303,14 @@ export default function Dashboard({ country, query: q }: { country: string; quer
               </div>
               <div className="side-body" role="tabpanel">
                 {tab === "outlook" ? (
-                  <OutlookPanel run={run} value={layerId} lang={L}
-                                onChange={(id) => { setLayerId(id); setMobileOpen(false); }} />
+                  <OutlookPanel run={run} value={base} period={period} lang={L}
+                                onChange={(b) => { choose(b); setMobileOpen(false); }} />
                 ) : null}
                 {tab === "areas" && areasLevel ? (
-                  <AreasPanel run={run} lang={L} level={areasLevel} onLevel={setAreasLevel} summary={areasSummary}
+                  <AreasPanel run={run} lang={L} level={areasLevel} onLevel={setAreasLevel} summary={areasSummary} period={period}
                               layer={layer} selectedId={selection?.kind === "area" ? selection.id : null} onPick={pickArea} />
                 ) : null}
-                {tab === "data" && profile ? <DataPanel run={run} profile={profile} layer={layer} lang={L} /> : null}
+                {tab === "data" && profile ? <DataPanel run={run} profile={profile} layer={layer} lang={L} period={period} /> : null}
               </div>
             </>
           ) : null}
@@ -323,6 +343,9 @@ export default function Dashboard({ country, query: q }: { country: string; quer
                        labels={{ zoomIn: t(L, "zoomIn"), zoomOut: t(L, "zoomOut"), fit: t(L, "fit"), basemap: t(L, "basemap") }} />
         ) : null}
 
+        {run ? <PeriodBar run={run} value={period} lang={L}
+                          onChange={(pid) => { setPeriod(pid); }} /> : null}
+
         {run && run.areas.length ? (
           <div className="showby" role="group" aria-label={t(L, "showBy")}>
             <span>{t(L, "showBy")}</span>
@@ -340,15 +363,16 @@ export default function Dashboard({ country, query: q }: { country: string; quer
             <Legend layer={layer} lang={L} init={run.init} groupIcon={groupIcon} opacity={opacity} onOpacity={setOpacity}
                     groupLabel={group ? tx(group.label, L) : undefined} position={position} onStep={step}
                     picker={(close) => (
-                      <OutlookPanel run={run} value={layerId} lang={L} autoFocus
-                                    onChange={(id) => { setLayerId(id); close(); }} />
+                      <OutlookPanel run={run} value={base} period={period} lang={L} autoFocus
+                                    onChange={(b) => { choose(b); close(); }} />
                     )} />
           </div>
         ) : null}
 
         {run && selection ? (
           <DetailPanel run={run} selection={selection} area={selArea} parents={parents} levelLabel={selLevelLabel}
-                       point={point} lang={L} onClose={() => setSelection(null)} current={layerId} onLayer={setLayerId} />
+                       point={point} lang={L} onClose={() => setSelection(null)} current={base} period={period}
+                       onLayer={choose} />
         ) : run ? <p className="hint">{t(L, "clickHint")}</p> : null}
       </main>
     </div>

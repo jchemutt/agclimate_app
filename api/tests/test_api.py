@@ -186,3 +186,62 @@ def test_dockerfile_healthcheck_uses_a_real_route(client):
     import re
     path = re.search(r"127\.0\.0\.1:8000(/[^'\"]+)", (ROOT / "api" / "Dockerfile").read_text()).group(1)
     assert client.get(path).status_code == 200
+
+
+# ------------------------------------------------------------------ periods (prep v11)
+DEMO = {k: Path(f"/tmp/claude-0/demo_{k}") for k in ("preview", "full")}
+
+
+def _period_client(tmp_path, monkeypatch, which):
+    if not (DEMO[which] / "kenya" / "latest.json").exists():
+        pytest.skip(f"demo run {DEMO[which]} not built (bench/publish_demo3.py {which})")
+    data = tmp_path / "data"
+    shutil.copytree(DEMO[which], data)
+    monkeypatch.setenv("DATA_DIR", str(data))
+    monkeypatch.setenv("PROFILES_DIR", str(ROOT / "profiles"))
+    from app.core.deps import reset_caches
+    from app.main import create_app
+    reset_caches()
+    return TestClient(create_app())
+
+
+@pytest.mark.parametrize("which", ["preview", "full"])
+def test_run_view_periods(tmp_path, monkeypatch, which):
+    c = _period_client(tmp_path, monkeypatch, which)
+    v = c.get("/api/v1/countries/kenya/runs/latest").json()
+    ids = [p["id"] for p in v["periods"]]
+    assert ids[0] == "OND" and v["default_period"] == "OND" and "2026-11" in ids
+    ond = next(p for p in v["periods"] if p["id"] == "OND")
+    assert ond["kind"] == "season" and ond["label"]["en"]                    # label from the profile season
+    assert v["preview"] is (which == "preview")
+    assert v["index"]["heat_stress_days"]["OND"] == "heat_stress_days__OND"
+    assert v["layers"]["heat_stress_days__OND"]["base"] == "heat_stress_days"
+    menu = {b for g in v["groups"] for b in g["layers"]}
+    assert "tmax_anomaly" in menu
+    if which == "preview":
+        assert "full" not in ids and "rainfall_total" not in menu
+        assert v["default_layer"] in v["index"] and "OND" in v["index"][v["default_layer"]]
+    else:
+        assert ids[-1] == "full" and v["index"]["advisory_class"] == {"full": "advisory_class__full"}
+        assert set(v["index"]["rainfall_total"]) >= {"OND", "2026-10", "full"}
+    county = next(a for a in v["areas"] if a["level"] == "county")
+    assert set(county["summary_urls"]) == set(ids)
+
+
+def test_area_summaries_and_outlook_per_period(tmp_path, monkeypatch):
+    c = _period_client(tmp_path, monkeypatch, "full")
+    nov = c.get("/api/v1/countries/kenya/runs/latest/areas/county?period=2026-11").json()
+    assert nov["period"] == "2026-11" and all("rainfall_total__2026-11" in a["values"] for a in nov["areas"])
+    assert c.get("/api/v1/countries/kenya/runs/latest/areas/county?period=1999-01").status_code == 404
+    dflt = c.get("/api/v1/countries/kenya/runs/latest/areas/county").json()
+    assert dflt["period"] == "OND"
+    aid = nov["areas"][0]["id"]
+    o = c.get(f"/api/v1/countries/kenya/runs/latest/areas/county/{aid}?period=OND&lang=sw").json()
+    assert o["period"] == "OND" and o["advisory"] is None                  # advisory is whole-forecast only
+    assert {i["base"] for i in o["items"]} >= {"rainfall_total", "tmax_anomaly"}
+    full = c.get(f"/api/v1/countries/kenya/runs/latest/areas/county/{aid}?period=full").json()
+    assert full["advisory"] is not None
+    csv = c.get("/api/v1/countries/kenya/runs/latest/areas/county?period=OND&format=csv")
+    assert "_OND_county.csv" in csv.headers["content-disposition"]
+    pt = c.get("/api/v1/countries/kenya/runs/latest/point?lat=0.5&lon=37.5&period=2026-12").json()
+    assert pt["period"] == "2026-12" and all(i["period"] == "2026-12" for i in pt["items"])

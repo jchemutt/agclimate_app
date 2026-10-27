@@ -18,6 +18,9 @@ def point(response: Response, init: str = INIT_PARAM,
           lat: float = Query(..., ge=-90, le=90, description="Latitude (WGS84)", examples=[-0.3]),
           lon: float = Query(..., ge=-180, le=180, description="Longitude (WGS84)", examples=[37.07]),
           lang: Optional[str] = Query(None, description="Language for titles and advisory text"),
+          period: Optional[str] = Query(None, description="Period id for `items` and `advisory` (`OND`, "
+                                        "`2026-11`, `full`); default: the run's default period. `layers` "
+                                        "always holds every period's values"),
           p: Profile = Depends(get_profile), st: Store = Depends(get_store)):
     """Every map layer at the grid cell containing the point, each ensemble member's
     value, the rainfall tercile thresholds, and the advisory in the requested language.
@@ -35,6 +38,11 @@ def point(response: Response, init: str = INIT_PARAM,
     if out is None:
         raise HTTPException(404, "Location outside the forecast grid")
     language = pick_language(p, lang)
-    items, advisory = items_for(run_view(p, real, cat, st), out["layers"], language) if out["inside"] else ([], None)
+    view = run_view(p, real, cat, st)
+    if period and period not in [x["id"] for x in view["periods"]]:
+        raise HTTPException(404, f"No period {period!r} in this run")
+    pid = period or view["default_period"]
+    items, advisory = items_for(view, out["layers"], language, pid) if out["inside"] else ([], None)
     cache(response, init)
-    return {"country": p.id, "init": real, **out, "language": language, "advisory": advisory, "items": items}
+    return {"country": p.id, "init": real, **out, "language": language, "period": pid,
+            "advisory": advisory, "items": items}

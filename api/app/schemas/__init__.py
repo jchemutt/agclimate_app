@@ -79,7 +79,9 @@ class Legend(_Out):
 
 
 class LayerInfo(BaseModel):
-    id: str = Field(examples=["advisory_class"])
+    id: str = Field(examples=["rainfall_total__OND"], description="`<base>__<period>`")
+    base: str = Field(examples=["rainfall_total"], description="Indicator, as used in the layer menu")
+    period: str = Field(examples=["OND"], description="Period id from `periods`")
     type: Literal["continuous", "categorical"]
     units: str
     title: Text
@@ -92,7 +94,7 @@ class LayerInfo(BaseModel):
 class LayerGroup(BaseModel):
     id: str
     label: Text
-    layers: list[str]
+    layers: list[str] = Field(description="Indicator (base) ids; see `index` for the layer per period")
     icon: Optional[str] = None
 
 
@@ -100,8 +102,19 @@ class AreaLevel(BaseModel):
     level: str = Field(examples=["county"])
     label: Text
     count: Optional[int] = None
-    summary_url: str
+    summary_url: str = Field(description="Summaries for the default period")
+    summary_urls: dict[str, str] = Field({}, description="Summaries per period id")
     boundaries_url: str
+
+
+class Period(BaseModel):
+    id: str = Field(examples=["OND"], description="Season id, month (`2026-11`) or `full`")
+    kind: Literal["season", "month", "window"]
+    label: Text
+    start: Optional[str] = None
+    end: Optional[str] = None
+    days: Optional[int] = None
+    months: Optional[list[str]] = None
 
 
 class RunView(BaseModel):
@@ -115,9 +128,15 @@ class RunView(BaseModel):
     bbox: Optional[list[float]] = Field(None, description="lon0, lat0, lon1, lat1")
     grid: Optional[dict] = None
     terciles: Optional[dict] = Field(None, description="Baseline used for the tercile categories")
+    preview: bool = Field(False, description="Published before all variables arrived (e.g. temperature only)")
+    periods: list[Period] = []
+    default_period: Optional[str] = None
     layers: dict[str, LayerInfo]
+    index: dict[str, dict[str, str]] = Field({}, description="base -> period -> layer id")
     groups: list[LayerGroup]
-    default_layer: Optional[str] = None
+    default_layer: Optional[str] = Field(None, description="Base id for the default period")
+    default_layers: list[str] = Field([], description="Preferred bases in order; clients pick the first "
+                                                      "the chosen period has")
     areas: list[AreaLevel]
     point_query: bool = Field(description="Whether /point is available for this run")
 
@@ -126,6 +145,8 @@ class RunView(BaseModel):
 class OutlookItem(BaseModel):
     """One layer at one place, ready to show or send (titles in the requested language)."""
     id: str
+    base: Optional[str] = None
+    period: Optional[str] = None
     title: str
     value: Optional[float] = Field(None, description="Raw value (area mean, or class for categorical layers)")
     units: str = ""
@@ -150,6 +171,7 @@ class AreaRecord(_Out):
 
 class AreaSummary(_Out):
     level: str
+    period: Optional[str] = None
     areas: list[AreaRecord]
 
 
@@ -160,6 +182,7 @@ class AreaOutlook(BaseModel):
     language: str
     level: str
     level_label: str
+    period: Optional[str] = None
     id: str
     name: str
     parents: list[str] = Field(description="Names of the enclosing areas, nearest first")
@@ -187,5 +210,6 @@ class PointResult(BaseModel):
     members: Optional[dict[str, list[Optional[float]]]] = Field(None, description="Each ensemble member's value")
     terciles: Optional[Terciles] = None
     language: Optional[str] = None
+    period: Optional[str] = None
     advisory: Optional[Advisory] = None
     items: list[OutlookItem] = []

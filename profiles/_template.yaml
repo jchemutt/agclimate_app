@@ -46,7 +46,8 @@ layer_groups:
   # Layers you leave out of every group appear under "More layers".
   - {id: advisory, label: Advisory, layers: [advisory_class]}
   - {id: rainfall, label: Rainfall, layers: [rain_tercile_most_likely, rainfall_anomaly_percent]}
-default_layer: advisory_class
+default_layer: [advisory_class, rain_tercile_most_likely]   # first one the chosen period has
+# default_period: OND        # optional: Period selector opens here (default: first complete season)
 
 # Optional per-country titles, descriptions and class names.
 layer_overrides:

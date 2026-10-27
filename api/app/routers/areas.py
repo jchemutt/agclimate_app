@@ -8,18 +8,23 @@ from ..core.profiles import Profile, text
 from ..core.storage import NotFound, Store
 from ..schemas import AreaOutlook, AreaSummary
 from ..services.outlook import area_number, areas_csv, items_for, parents_of, pick_language
-from ..services.runs import run_view
+from ..services.runs import run_view, summary_key
 
 router = APIRouter(tags=["Areas"])
 LEVEL = Path(..., description="Admin level id from the run's `areas`, e.g. `county`", examples=["county"])
 LANG = Query(None, description="Language code from the profile (e.g. `en`, `sw`); default: the profile's default")
+PERIOD = Query(None, description="Period id from the run's `periods`: a season (`OND`), a month (`2026-11`) "
+                                 "or `full` (whole forecast). Default: the run's default period",
+               examples=["OND"])
 
 
-def _summary(p: Profile, init: str, level: str, st: Store) -> dict:
+def _summary(p: Profile, init: str, level: str, st: Store, period: str | None = None) -> dict:
     try:
-        return st.json(f"{p.id}/{init}/areas/{level}.json")
+        key, pid = summary_key(load_catalog(p, init, st), level, period)
+        data = st.json(f"{p.id}/{init}/{key}")
     except NotFound:
-        raise HTTPException(404, f"No {level} summaries for {p.id} {init}")
+        raise HTTPException(404, f"No {level} summaries for {p.id} {init}" + (f" period {period}" if period else ""))
+    return {**data, "period": pid}
 
 
 @router.get("/countries/{cid}/boundaries/{level}", summary="Boundaries (GeoJSON)",
@@ -42,12 +47,13 @@ def area_summaries(response: Response, init: str = INIT_PARAM, level: str = LEVE
                    q: Optional[str] = Query(None, description="Filter: area name contains this text (any case)"),
                    parent: Optional[str] = Query(None, description="Filter: only areas inside this parent id"),
                    format: Literal["json", "csv"] = Query("json", description="`csv` for a spreadsheet"),
-                   lang: Optional[str] = LANG,
+                   lang: Optional[str] = LANG, period: Optional[str] = PERIOD,
                    p: Profile = Depends(get_profile), st: Store = Depends(get_store)):
-    """Every area's value for every layer: mean/min/max for continuous layers,
-    majority class and class shares for categorical ones."""
+    """Every area's value for every layer of one period: mean/min/max for continuous
+    layers, majority class and class shares for categorical ones. Keys are layer ids
+    (`<base>__<period>`)."""
     real = resolve_init(p, init, st)
-    data = _summary(p, real, level, st)
+    data = _summary(p, real, level, st, period)
     if q or parent:
         ql = (q or "").lower()
         data = {**data, "areas": [a for a in data["areas"]
@@ -56,9 +62,9 @@ def area_summaries(response: Response, init: str = INIT_PARAM, level: str = LEVE
                                        or (a.get("parent_id") or "").startswith(parent + "/"))]}
     if format == "csv":
         view = run_view(p, real, load_catalog(p, real, st), st)
-        body = areas_csv(view, data, pick_language(p, lang))
+        body = areas_csv(view, data, pick_language(p, lang), data["period"])
         return PlainTextResponse(body, media_type="text/csv", headers={
-            "Content-Disposition": f'attachment; filename="{p.id}_{real}_{level}.csv"',
+            "Content-Disposition": f'attachment; filename="{p.id}_{real}_{data["period"]}_{level}.csv"',
             "Cache-Control": "public, max-age=60" if init == "latest" else "public, max-age=86400"})
     cache(response, init)
     return data
@@ -69,29 +75,31 @@ def area_summaries(response: Response, init: str = INIT_PARAM, level: str = LEVE
 def area_outlook(response: Response, init: str = INIT_PARAM, level: str = LEVEL,
                  area_id: str = Path(..., description="Area id, e.g. `baringo` or `baringo/baringo-central`",
                                      examples=["baringo"]),
-                 lang: Optional[str] = LANG,
+                 lang: Optional[str] = LANG, period: Optional[str] = PERIOD,
                  p: Profile = Depends(get_profile), st: Store = Depends(get_store)):
-    """Advisory class and message plus every layer's value for one area, with titles,
+    """Advisory class and message plus every layer's value for one area and period, with titles,
     class names and dates in the requested language. Suited to chatbots, SMS and
     other systems that need text rather than maps."""
     real = resolve_init(p, init, st)
     cat = load_catalog(p, real, st)
     view = run_view(p, real, cat, st)
-    rec = next((a for a in _summary(p, real, level, st)["areas"] if a["id"] == area_id), None)
+    summ = _summary(p, real, level, st, period)
+    rec = next((a for a in summ["areas"] if a["id"] == area_id), None)
     if rec is None:
         raise HTTPException(404, f"No {level} {area_id!r} in {p.id}")
     language = pick_language(p, lang)
-    items, advisory = items_for(view, {k: area_number(v) for k, v in rec["values"].items()}, language)
+    items, advisory = items_for(view, {k: area_number(v) for k, v in rec["values"].items()}, language,
+                                summ["period"])
     levels = [a["level"] for a in view["areas"]]
     above = []
     for lv in reversed(levels[:levels.index(level)] if level in levels else []):
         try:
-            above.append(st.json(f"{p.id}/{real}/areas/{lv}.json"))
-        except NotFound:
+            above.append(_summary(p, real, lv, st, summ["period"]))
+        except HTTPException:
             break
     cache(response, init)
     return {"country": p.id, "init": real, "season": view["season"], "language": language,
-            "level": level, "level_label": text(p.level_label(level), language),
+            "level": level, "level_label": text(p.level_label(level), language), "period": summ["period"],
             "id": rec["id"], "name": rec["name"], "parents": parents_of(rec, above),
             "valid_from": view["valid_from"], "valid_to": view["valid_to"],
             "advisory": advisory, "items": items}

@@ -52,8 +52,9 @@ layer_groups:                  # order = order in the layer menu; layers missing
     label: {en: Drought, sw: Ukame}
     layers: [drought_prob_spi3, spi_3, drought_prob_spei3, spei_3, agro_pastoral_drought]
   - id: heat
-    label: {en: Heat, sw: Joto}
-    layers: [heat_stress_days, hot_nights]
+    label: {en: Temperature and heat, sw: Joto}
+    layers: [temp_tercile_most_likely, temp_prob_above_normal, temp_prob_below_normal,
+             tmax_anomaly, tmin_anomaly, heat_stress_days, hot_nights]
   - id: livestock
     label: {en: Livestock and pasture, sw: Mifugo na malisho}
     layers: [thi_risk_class, livestock_heat_days, pasture_drought, forage_growth, feed_water_stress,
@@ -61,7 +62,10 @@ layer_groups:                  # order = order in the layer menu; layers missing
   - id: pastoral
     label: {en: "Mobility, water and hazards", sw: "Uhamaji, maji na hatari"}
     layers: [mobility_stress, grazing_conflict, water_pressure, surface_water_stress, mud_wetness, dust_dryness]
-default_layer: advisory_class
+# Map opens on the first of these the chosen period has (advisory: whole forecast;
+# rainfall: seasons, months, whole; temperature: also in a temperature-only preview).
+default_layer: [advisory_class, rain_tercile_most_likely, temp_tercile_most_likely]
+default_period: OND             # the Period selector opens here when the run has it
 
 # Titles and short descriptions per language (English falls back to the pipeline's text).
 # Kiswahili wording: please have a native speaker review before wide release.
@@ -160,7 +164,25 @@ layer_overrides:
   agro_pastoral_drought:
     title: {en: Agro-pastoral drought risk, sw: Hatari ya ukame kwa wakulima na wafugaji}
 
-  # ---- heat
+  # ---- temperature and heat (per season / month)
+  temp_tercile_most_likely:
+    title: {en: Most likely temperature, sw: Joto linalotarajiwa zaidi}
+    classes:
+      1: {en: Below normal, sw: Chini ya kawaida}
+      2: {en: Near normal, sw: Karibu na kawaida}
+      3: {en: Above normal, sw: Juu ya kawaida}
+  temp_prob_above_normal: {title: {en: Chance of above-normal temperature, sw: Uwezekano wa joto juu ya kawaida}}
+  temp_prob_below_normal: {title: {en: Chance of below-normal temperature, sw: Uwezekano wa joto chini ya kawaida}}
+  tmax_anomaly:
+    title: {en: Daytime temperature vs normal, sw: Joto la mchana ikilinganishwa na kawaida}
+    description:
+      en: Average daily maximum compared with the same months in 1991–2020 (°C warmer or cooler).
+      sw: Wastani wa joto la juu la kila siku ikilinganishwa na miezi hiyo 1991–2020 (°C zaidi au chini).
+  tmin_anomaly:
+    title: {en: Night-time temperature vs normal, sw: Joto la usiku ikilinganishwa na kawaida}
+    description:
+      en: Average daily minimum compared with the same months in 1991–2020 (°C warmer or cooler).
+      sw: Wastani wa joto la chini la kila siku ikilinganishwa na miezi hiyo 1991–2020 (°C zaidi au chini).
   heat_stress_days: {title: {en: Heat-stress days, sw: Siku za joto kali}}
   hot_nights:
     title: {en: Hot nights (24 °C+), sw: Usiku wenye joto (24 °C+)}

@@ -52,7 +52,9 @@ export interface Legend {
 }
 
 export interface LayerInfo {
-  id: string;
+  id: string;            // "<base>__<period>"
+  base: string;          // indicator id used in the layer menu and the profile
+  period: string;
   type: "continuous" | "categorical";
   units: string;
   title: Text;
@@ -67,7 +69,18 @@ export interface AreaLevel {
   label: Text;
   count: number;
   summary_url: string;
+  summary_urls?: Record<string, string>;     // per period id
   boundaries_url: string;
+}
+
+export interface Period {
+  id: string;                                 // "OND", "2026-11", "full"
+  kind: "season" | "month" | "window";
+  label: Text;
+  start?: string;
+  end?: string;
+  days?: number;
+  months?: string[];
 }
 
 export interface RunView {
@@ -79,9 +92,14 @@ export interface RunView {
   members: number;
   created: string;
   bbox: [number, number, number, number];
-  layers: Record<string, LayerInfo>;
-  groups: { id: string; label: Text; layers: string[]; icon?: string | null }[];
-  default_layer: string | null;
+  layers: Record<string, LayerInfo>;        // by layer id
+  index: Record<string, Record<string, string>>;   // base -> period -> layer id
+  periods: Period[];
+  default_period: string | null;
+  preview?: boolean;                         // published before all variables arrived
+  groups: { id: string; label: Text; layers: string[]; icon?: string | null }[];   // bases
+  default_layer: string | null;              // base
+  default_layers?: string[];                 // preferred bases in order
   areas: AreaLevel[];
   point_query: boolean;
   terciles: { baseline: number[]; years_used: number } | null;

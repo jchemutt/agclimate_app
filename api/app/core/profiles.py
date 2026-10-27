@@ -84,7 +84,8 @@ class Profile(_M):
     seasons: list[Season] = []
     default_season_label: Text = {"en": "Seasonal outlook"}
     layer_groups: list[LayerGroup] = []
-    default_layer: str | None = None
+    default_layer: str | list[str] | None = None   # base id, or preferred bases in order (first one the period has)
+    default_period: str | None = None   # e.g. OND; default: the run's first complete season
     layer_overrides: dict[str, LayerOverride] = {}
     # layer id -> class value -> message (e.g. what an "Alert" means for farmers here)
     advisories: dict[str, dict[int, Text]] = {}

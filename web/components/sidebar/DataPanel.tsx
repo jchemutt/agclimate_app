@@ -2,10 +2,16 @@ import { Download, FileCode2, FileSpreadsheet, Map as MapIcon } from "lucide-rea
 import type { LayerInfo, Profile, RunView } from "@/lib/types";
 import { t, tx } from "@/lib/i18n";
 import { fmtDate } from "@/lib/format";
+import { periodLabel } from "@/lib/layers";
 
-export default function DataPanel({ run, profile, layer, lang }: {
-  run: RunView; profile: Profile; layer: LayerInfo | null; lang: string;
+export default function DataPanel({ run, profile, layer, lang, period }: {
+  run: RunView; profile: Profile; layer: LayerInfo | null; lang: string; period: string | null;
 }) {
+  const csv = (a: RunView["areas"][number]) => {
+    const u = (period && a.summary_urls?.[period]) || a.summary_url;
+    return `${u}${u.includes("?") ? "&" : "?"}format=csv&lang=${lang}`;
+  };
+  const per = run.periods.find((p) => p.id === period);
   return (
     <div className="data-panel">
       <section className="card">
@@ -13,9 +19,9 @@ export default function DataPanel({ run, profile, layer, lang }: {
         <ul className="dl-list">
           {run.areas.map((a) => (
             <li key={a.level}>
-              <a href={`${a.summary_url}?format=csv&lang=${lang}`} download>
+              <a href={csv(a)} download>
                 <FileSpreadsheet size={18} aria-hidden />
-                <span><strong>{tx(a.label, lang)}</strong> {t(lang, "csvTable")}</span>
+                <span><strong>{tx(a.label, lang)}</strong> {t(lang, "csvTable")}{per ? ` · ${periodLabel(per, lang, run.init, true)}` : ""}</span>
                 <Download size={16} aria-hidden />
               </a>
             </li>
