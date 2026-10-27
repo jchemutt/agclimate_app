@@ -36,7 +36,7 @@ To add a country (for example Rwanda):
 2. **App**: copy `profiles/_template.yaml` to `profiles/rwanda.yaml` and fill it in. The `id` must equal the pipeline `name`, and the `admin_levels` ids must equal the published levels.
 3. Copy the file to the server's `profiles/` folder. The API notices new and changed files on the next request, so no restart is needed.
 
-Until its first run is published, the country shows as "No forecast published yet". An invalid profile never breaks the other countries; it's listed under `invalid_profiles` in `/api/health`.
+Until its first run is published, the country shows as "No forecast published yet". An invalid profile never breaks the other countries; it's listed under `invalid_profiles` in `/api/v1/health`.
 
 ## API (for this app and for other systems)
 

@@ -179,3 +179,10 @@ def test_openapi_documents_every_route(client):
     assert all(op.get("summary") and op.get("tags") for _, _, op in ops)
     assert "AreaOutlook" in spec["components"]["schemas"]
     assert client.get("/api/docs").status_code == 200
+
+
+def test_dockerfile_healthcheck_uses_a_real_route(client):
+    """The container health check must call an existing endpoint (it broke when routes moved to /api/v1)."""
+    import re
+    path = re.search(r"127\.0\.0\.1:8000(/[^'\"]+)", (ROOT / "api" / "Dockerfile").read_text()).group(1)
+    assert client.get(path).status_code == 200
