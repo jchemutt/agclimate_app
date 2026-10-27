@@ -127,49 +127,19 @@ setup script detects the CPU type. Use `--instance-type t4g.medium` and the arm6
 
 ## Deploying on EC2 (af-south-1)
 
-Run these once, from Git Bash in `deploy/`, with your admin AWS credentials:
+One script creates everything, from Git Bash with your admin AWS credentials:
 
 ```bash
-export AWS_REGION=af-south-1 MSYS_NO_PATHCONV=1
-
-# 1. Instance role: read published/* only, plus Session Manager for shell access (no SSH)
-aws iam create-role --role-name AgClimateAF-App-EC2 --assume-role-policy-document \
-  '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"ec2.amazonaws.com"},"Action":"sts:AssumeRole"}]}'
-aws iam put-role-policy --role-name AgClimateAF-App-EC2 --policy-name ReadPublished \
-  --policy-document file://iam-ec2-app-policy.json
-aws iam attach-role-policy --role-name AgClimateAF-App-EC2 \
-  --policy-arn arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
-aws iam create-instance-profile --instance-profile-name AgClimateAF-App-EC2
-aws iam add-role-to-instance-profile --instance-profile-name AgClimateAF-App-EC2 --role-name AgClimateAF-App-EC2
-
-# 2. Firewall: web traffic only
-VPC=$(aws ec2 describe-vpcs --filters Name=isDefault,Values=true --query 'Vpcs[0].VpcId' --output text)
-SG=$(aws ec2 create-security-group --group-name agclimateaf-app --description "AgClimate AF web app" \
-  --vpc-id "$VPC" --query GroupId --output text)
-aws ec2 authorize-security-group-ingress --group-id "$SG" --ip-permissions \
-  'IpProtocol=tcp,FromPort=80,ToPort=80,IpRanges=[{CidrIp=0.0.0.0/0}]' \
-  'IpProtocol=tcp,FromPort=443,ToPort=443,IpRanges=[{CidrIp=0.0.0.0/0}]'
-
-# 3. The instance (Amazon Linux 2023, t3.medium, 30 GB). Hop limit 2 lets the API
-#    container reach the instance role's credentials.
-AMI=$(aws ssm get-parameter --name /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64 \
-  --query Parameter.Value --output text)
-ID=$(aws ec2 run-instances --image-id "$AMI" --instance-type t3.medium \
-  --iam-instance-profile Name=AgClimateAF-App-EC2 --security-group-ids "$SG" \
-  --block-device-mappings 'DeviceName=/dev/xvda,Ebs={VolumeSize=30,VolumeType=gp3}' \
-  --metadata-options HttpTokens=required,HttpPutResponseHopLimit=2 \
-  --user-data file://ec2-user-data.sh \
-  --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=agclimateaf-app}]' \
-  --query 'Instances[0].InstanceId' --output text)
-aws ec2 wait instance-running --instance-ids "$ID"
-
-# 4. A fixed public IP
-EIP=$(aws ec2 allocate-address --query AllocationId --output text)
-aws ec2 associate-address --instance-id "$ID" --allocation-id "$EIP"
-aws ec2 describe-addresses --allocation-ids "$EIP" --query 'Addresses[0].PublicIp' --output text
+deploy/ec2.sh create          # role, firewall, t3.medium instance, fixed IP; prints the IP
 ```
 
-If `run-instances` says the instance profile is invalid, wait 10 seconds and run it again; new IAM roles take a moment to become usable. If `describe-vpcs` returns `None`, there is no default VPC: use the VPC and a public subnet of your Batch compute environment, and add `--subnet-id <subnet>` to `run-instances`.
+It is safe to re-run: it reuses whatever already exists. The pieces:
+- an **IAM role** that can only read `s3://<bucket>/published/*`, plus Session Manager for shell access (no SSH keys, no port 22);
+- a **firewall group** with only ports 80 and 443 open;
+- an **Amazon Linux 2023** instance (30 GB encrypted disk) that installs Docker and Compose on first boot (`ec2-user-data.sh`);
+- an **Elastic IP**, so the address never changes.
+
+Options: `INSTANCE_TYPE=t4g.medium deploy/ec2.sh create` for Graviton; `SUBNET_ID=subnet-...` if the account has no default VPC; `S3_BUCKET=...` for another bucket. Other commands: `deploy/ec2.sh status`, `stop`, `start`, `destroy`.
 
 Then open a shell on the instance. In the EC2 console select **agclimateaf-app**, then **Connect** → **Session Manager** → **Connect**. Allow a few minutes after launch for the setup script to finish.
 
