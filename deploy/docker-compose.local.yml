@@ -1,0 +1,10 @@
+# Run on your own machine against a local folder of published output instead of S3.
+#   docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build
+# Expects ./demo_published/kenya/... (or set LOCAL_DATA to another folder) and,
+# in .env, DOMAIN=:80 so Caddy serves plain http://localhost.
+services:
+  api:
+    environment:
+      DATA_DIR: /data
+    volumes:
+      - ${LOCAL_DATA:-./demo_published}:/data:ro
