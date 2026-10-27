@@ -9,6 +9,9 @@ id: rwanda                     # REQUIRED. Lower case; equals the pipeline domai
                                # (config `name:`), i.e. s3://<bucket>/published/rwanda/
 name: {en: Rwanda}             # REQUIRED
 flag: "🇷🇼"
+iso2: RW                       # flag image and globe highlight
+description: Seasonal outlooks with advisories for every district.   # landing page line
+theme: {primary: "#1f6f78", accent: "#c98a2b"}   # optional accent colours (hex)
 languages: [en]                # first one is the default unless default_language is set
 default_language: en
 hidden: false                  # true = keep the profile but leave it out of the country list
@@ -38,6 +41,7 @@ default_season_label: Seasonal outlook
 #   false_start_prob, drought_prob_spi3, spi_3, heat_stress_days
 # Published layers not listed here appear under "More layers".
 layer_groups:
+  # icon (optional): advisory, rainfall, season, drought, heat, layers (default: the group id)
   - {id: advisory, label: Advisory, layers: [advisory_class]}
   - {id: rainfall, label: Rainfall, layers: [rain_tercile_most_likely, rainfall_anomaly_percent]}
 default_layer: advisory_class

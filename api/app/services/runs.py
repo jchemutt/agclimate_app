@@ -16,7 +16,8 @@ def country_summaries(profiles: dict[str, Profile], st: Store) -> list[dict]:
             latest = {"init": latest["init"], "season": p.season_for(latest["init"])}
         except NotFound:
             latest = None
-        out.append({"id": p.id, "name": p.name, "flag": p.flag, "languages": p.languages,
+        out.append({"id": p.id, "name": p.name, "flag": p.flag, "iso2": p.iso2, "description": p.description,
+                    "theme": p.theme.model_dump(exclude_none=True), "languages": p.languages,
                     "default_language": p.default_language, "latest": latest})
     return sorted(out, key=lambda c: c["name"] if isinstance(c["name"], str) else c["name"].get("en", c["id"]))
 
@@ -55,11 +56,11 @@ def run_view(p: Profile, init: str, cat: dict, st: Store) -> dict:
     for g in p.layer_groups:
         ids = [i for i in g.layers if i in layers]
         if ids:
-            groups.append({"id": g.id, "label": g.label, "layers": ids})
+            groups.append({"id": g.id, "label": g.label, "layers": ids, "icon": g.icon or g.id})
             used.update(ids)
     rest = [i for i in layers if i not in used]
     if rest:
-        groups.append({"id": "more", "layers": rest,
+        groups.append({"id": "more", "layers": rest, "icon": "layers",
                        "label": {"en": "More layers", "sw": "Tabaka zaidi"} if p.layer_groups
                        else {"en": "Layers", "sw": "Tabaka"}})
     order = {a.id: k for k, a in enumerate(p.admin_levels)}

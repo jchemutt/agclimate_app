@@ -3,6 +3,11 @@
 id: kenya                      # = pipeline domain (s3://<bucket>/published/kenya/)
 name: {en: Kenya, sw: Kenya}
 flag: "🇰🇪"
+iso2: KE
+description:
+  en: Rainfall, drought and heat outlooks with advisories for 47 counties, down to the ward.
+  sw: Utabiri wa mvua, ukame na joto pamoja na ushauri kwa kaunti 47, hadi ngazi ya wadi.
+theme: {primary: "#1f6f78", accent: "#c98a2b"}   # optional per-country colours
 languages: [en, sw]
 default_language: en
 

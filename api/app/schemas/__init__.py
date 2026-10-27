@@ -38,6 +38,9 @@ class CountrySummary(BaseModel):
     id: str = Field(examples=["kenya"])
     name: Text
     flag: str
+    iso2: Optional[str] = None
+    description: Optional[Text] = None
+    theme: Optional[dict] = None
     languages: list[str]
     default_language: str
     latest: Optional[LatestRun] = Field(None, description="Newest published run; null until the first run")
@@ -90,6 +93,7 @@ class LayerGroup(BaseModel):
     id: str
     label: Text
     layers: list[str]
+    icon: Optional[str] = None
 
 
 class AreaLevel(BaseModel):

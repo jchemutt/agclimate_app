@@ -51,6 +51,12 @@ class LayerGroup(_M):
     id: str
     label: Text
     layers: list[str]
+    icon: str | None = None                             # advisory, rainfall, season, drought, heat, layers
+
+
+class Theme(_M):
+    primary: str | None = Field(None, pattern=r"^#[0-9a-fA-F]{6}$")   # buttons, active items
+    accent: str | None = Field(None, pattern=r"^#[0-9a-fA-F]{6}$")    # highlights
 
 
 class LayerOverride(_M):
@@ -67,7 +73,10 @@ class Link(_M):
 class Profile(_M):
     id: str = Field(pattern=r"^[a-z0-9][a-z0-9_-]*$")   # = pipeline domain: published/<id>/
     name: Text
-    flag: str = ""
+    flag: str = ""                                      # emoji (fallback)
+    iso2: str | None = Field(None, pattern=r"^[A-Za-z]{2}$")   # flag image + globe highlight, e.g. KE
+    description: Text | None = None                     # one line for the landing page
+    theme: Theme = Theme()
     languages: list[str] = ["en"]
     default_language: str | None = None
     map: MapConfig = MapConfig()

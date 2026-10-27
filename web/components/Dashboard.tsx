@@ -1,18 +1,28 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
+import type OlMap from "ol/Map";
+import { Download, Home, Layers, MapPinned, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { api } from "@/lib/api";
 import type { AreaSummary, PointResult, Profile, RunListItem, RunView, Selection } from "@/lib/types";
 import { LANGUAGE_NAMES, t, tx } from "@/lib/i18n";
 import { fmtDate } from "@/lib/format";
-import LayerMenu from "./LayerMenu";
+import { themeVars } from "@/lib/theme";
+import { BASEMAPS, customBasemap, type BasemapId } from "@/lib/basemaps";
+import Flag from "./Flag";
 import Legend from "./Legend";
+import MapControls from "./MapControls";
 import DetailPanel, { findArea } from "./DetailPanel";
+import OutlookPanel from "./sidebar/OutlookPanel";
+import AreasPanel from "./sidebar/AreasPanel";
+import DataPanel from "./sidebar/DataPanel";
+import type { Focus } from "./MapView";
 
 const MapView = dynamic(() => import("./MapView"), { ssr: false, loading: () => <div className="map" /> });
 const GRID = "grid";
+type Tab = "outlook" | "areas" | "data";
 
 interface Query { lang: string | null; run: string | null; layer: string | null; by: string | null }
 
@@ -28,13 +38,21 @@ export default function Dashboard({ country, query: q }: { country: string; quer
   const [summaries, setSummaries] = useState<Record<string, AreaSummary>>({});
   const [selection, setSelection] = useState<Selection | null>(null);
   const [point, setPoint] = useState<PointResult | null | "loading" | "error">(null);
-  const [menuOpen, setMenuOpen] = useState(false);
+  const [tab, setTab] = useState<Tab>("outlook");
+  const [collapsed, setCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [areasLevel, setAreasLevel] = useState<string | null>(null);
+  const [basemapId, setBasemapId] = useState<BasemapId>("light");
+  const [opacity, setOpacity] = useState(0.85);
+  const [mapObj, setMapObj] = useState<OlMap | null>(null);
+  const [focus, setFocus] = useState<Focus | null>(null);
 
   // profile + run list
   useEffect(() => {
     api.profile(country).then((p) => {
       setProfile(p);
       setLang((l) => (l && p.languages.includes(l) ? l : storedLang(country, p)));
+      if (p.map.basemap) setBasemapId("custom");
     }).catch((e) => setError(e.status === 404 ? "missing" : "failed"));
     api.runs(country).then(setRuns).catch(() => setRuns([]));
   }, [country]);
@@ -47,26 +65,31 @@ export default function Dashboard({ country, query: q }: { country: string; quer
       setError(null);
       setLayerId((id) => (id && r.layers[id] ? id : r.default_layer));
       setBy((b) => (b === GRID || r.areas.some((a) => a.level === b) ? b : r.areas[0]?.level ?? GRID));
+      setAreasLevel((l) => (l && r.areas.some((a) => a.level === l) ? l : r.areas[0]?.level ?? null));
     }).catch((e) => setError((prev) => (prev === "missing" ? prev : e.status === 404 ? "nodata" : "failed")));
   }, [country, init]);
 
   const level = run?.areas.find((a) => a.level === by) ?? null;
   const layer = run && layerId ? run.layers[layerId] ?? null : null;
 
-  // area summaries for the shown level (and the levels above, for parent names)
+  // area summaries: the shown level, the Areas-tab level, and levels above a selection (parent names)
   useEffect(() => {
     if (!run) return;
-    const want = level ? run.areas.slice(0, run.areas.indexOf(level) + 1) : [];
-    if (selection?.kind === "area") {
-      const i = run.areas.findIndex((a) => a.level === selection.level);
-      run.areas.slice(0, i + 1).forEach((a) => !want.includes(a) && want.push(a));
-    }
-    want.forEach((a) => {
-      const key = `${run.init}/${a.level}`;
-      if (summaries[key]) return;
+    const want = new Set<string>();
+    const upTo = (lv: string | null | undefined) => {
+      const i = run.areas.findIndex((a) => a.level === lv);
+      run.areas.slice(0, i + 1).forEach((a) => want.add(a.level));
+    };
+    upTo(level?.level);
+    if (tab === "areas") upTo(areasLevel);
+    if (selection?.kind === "area") upTo(selection.level);
+    want.forEach((lv) => {
+      const key = `${run.init}/${lv}`;
+      const a = run.areas.find((x) => x.level === lv);
+      if (summaries[key] || !a) return;
       api.areas(a.summary_url).then((s) => setSummaries((m) => ({ ...m, [key]: s }))).catch(() => undefined);
     });
-  }, [run, level, selection, summaries]);
+  }, [run, level, selection, summaries, tab, areasLevel]);
 
   // point values for the selection
   useEffect(() => {
@@ -98,12 +121,19 @@ export default function Dashboard({ country, query: q }: { country: string; quer
     try { localStorage.setItem(`lang:${country}`, l); } catch { /* private mode */ }
   }, [country]);
 
+  const basemaps = useMemo(
+    () => (profile?.map.basemap ? [customBasemap(profile.map.basemap), ...BASEMAPS] : BASEMAPS),
+    [profile],
+  );
+  const basemap = basemaps.find((b) => b.id === basemapId) ?? basemaps[0];
+
   const L = lang || profile?.default_language || "en";
 
   if (error === "missing") return <Message lang={L} text={t(L, "countryMissing")} />;
   if (error === "failed") return <Message lang={L} text={t(L, "loadFailed")} />;
 
   const summary = run && level ? summaries[`${run.init}/${level.level}`] ?? null : null;
+  const areasSummary = run && areasLevel ? summaries[`${run.init}/${areasLevel}`] ?? null : null;
   const selArea = selection?.kind === "area" && run ? findArea(summaries[`${run.init}/${selection.level}`] ?? null, selection.id) : null;
   const parents: string[] = [];
   if (selArea && run && selection?.kind === "area") {
@@ -117,74 +147,115 @@ export default function Dashboard({ country, query: q }: { country: string; quer
     }
   }
   const selLevelLabel = selection?.kind === "area" ? tx(run?.areas.find((a) => a.level === selection.level)?.label, L) : "";
-  const year = run ? run.init.slice(0, 4) : "";
+  const groupIcon = run?.groups.find((g) => g.layers.includes(layerId ?? ""))?.icon ?? null;
+
+  const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
+    { id: "outlook", label: t(L, "tabOutlook"), icon: <Layers size={16} aria-hidden /> },
+    { id: "areas", label: t(L, "tabAreas"), icon: <MapPinned size={16} aria-hidden /> },
+    { id: "data", label: t(L, "tabData"), icon: <Download size={16} aria-hidden /> },
+  ];
+  const openTab = (id: Tab) => {
+    setTab(id);
+    setCollapsed(false);
+    setMobileOpen((o) => (tab === id ? !o : true));
+  };
+  const pickArea = (lv: string, id: string) => {
+    setBy(lv);
+    setFocus({ level: lv, id, nonce: Date.now() });
+    setMobileOpen(false);
+  };
 
   return (
-    <div className="app" lang={L}>
-      <section className={`rail${menuOpen ? " is-open" : ""}`}>
-        <header className="rail-head">
-          <Link href="/" className="country-link">
-            <span aria-hidden>{profile?.flag}</span> {tx(profile?.name, L)}
-          </Link>
+    <div className={`app${collapsed ? " is-collapsed" : ""}${mobileOpen ? " is-mobile-open" : ""}`} lang={L}
+         style={themeVars(profile?.theme)}>
+      {collapsed ? (
+        <nav className="side-rail" aria-label={t(L, "tabOutlook")}>
+          <button type="button" className="rail-btn" onClick={() => setCollapsed(false)} title={t(L, "expand")} aria-label={t(L, "expand")}>
+            <PanelLeftOpen size={18} />
+          </button>
+          <span className="rail-flag"><Flag iso2={profile?.iso2} emoji={profile?.flag} /></span>
+          {tabs.map((x) => (
+            <button key={x.id} type="button" className={`rail-btn${tab === x.id ? " is-on" : ""}`}
+                    onClick={() => openTab(x.id)} title={x.label} aria-label={x.label}>{x.icon}</button>
+          ))}
+          <Link href="/" className="rail-btn rail-home" title={t(L, "home")} aria-label={t(L, "home")}><Home size={18} /></Link>
+        </nav>
+      ) : (
+        <aside className="side">
+          <header className="side-head">
+            <span className="side-flag"><Flag iso2={profile?.iso2} emoji={profile?.flag} /></span>
+            <div className="side-title">
+              <strong>{tx(profile?.name, L)}</strong>
+              <span>{t(L, "seasonalOutlook")}</span>
+            </div>
+            <button type="button" className="icon-square hide-mobile" onClick={() => setCollapsed(true)}
+                    title={t(L, "collapse")} aria-label={t(L, "collapse")}><PanelLeftClose size={18} /></button>
+            <Link href="/" className="icon-square" title={t(L, "home")} aria-label={t(L, "home")}><Home size={18} /></Link>
+          </header>
+
           {profile && profile.languages.length > 1 ? (
             <div className="lang" role="group" aria-label={t(L, "language")}>
               {profile.languages.map((l) => (
-                <button key={l} className={l === L ? "is-on" : ""} aria-pressed={l === L} onClick={() => chooseLang(l)}>
+                <button key={l} type="button" className={l === L ? "is-on" : ""} aria-pressed={l === L} onClick={() => chooseLang(l)}>
                   {LANGUAGE_NAMES[l] ?? l}
                 </button>
               ))}
             </div>
           ) : null}
-        </header>
 
-        {error === "nodata" ? (
-          <div>
-            <p className="season-empty">{t(L, "noForecast")}</p>
-            <p className="season-meta">{t(L, "firstRun")}</p>
-          </div>
-        ) : run ? (
-          <div className="season">
-            <h1>{tx(run.season.label, L)} {year}</h1>
-            <p className="season-meta">
-              {t(L, "covers")} {fmtDate(run.valid_from, L)} – {fmtDate(run.valid_to, L)}.{" "}
-              {t(L, "issued")} {fmtDate((run.created ?? run.init).slice(0, 10), L)}, {run.members} {t(L, "members")}.
-            </p>
-            {runs.length > 1 ? (
-              <label className="run-pick">
-                <span>{t(L, "forecastRun")}</span>
-                <select value={init === "latest" ? run.init : init} onChange={(e) => { setSelection(null); setInit(e.target.value); }}>
-                  {runs.map((r) => (
-                    <option key={r.init} value={r.init}>
-                      {tx(r.season.label, L)} {r.init.slice(0, 4)} ({fmtDate(r.init, L, { month: "short", year: "numeric" })})
-                    </option>
-                  ))}
-                </select>
-              </label>
-            ) : null}
-          </div>
-        ) : (
-          <p className="season-empty">{t(L, "loading")}</p>
-        )}
+          <section className="season-card">
+            {error === "nodata" ? (
+              <>
+                <h1>{t(L, "noForecast")}</h1>
+                <p>{t(L, "firstRun")}</p>
+              </>
+            ) : run ? (
+              <>
+                <p className="season-sub">{t(L, "seasonalOutlook")}</p>
+                <h1>{tx(run.season.label, L)} {run.init.slice(0, 4)}</h1>
+                <p>{fmtDate(run.valid_from, L)} – {fmtDate(run.valid_to, L)}</p>
+                <p className="season-meta">{t(L, "issued")} {fmtDate((run.created ?? run.init).slice(0, 10), L)}, {run.members} {t(L, "members")}</p>
+                {runs.length > 1 ? (
+                  <label className="run-pick">
+                    <span>{t(L, "forecastRun")}</span>
+                    <select value={init === "latest" ? run.init : init} onChange={(e) => { setSelection(null); setInit(e.target.value); }}>
+                      {runs.map((r) => (
+                        <option key={r.init} value={r.init}>
+                          {tx(r.season.label, L)} {r.init.slice(0, 4)} ({fmtDate(r.init, L, { month: "short", year: "numeric" })})
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : null}
+              </>
+            ) : <h1>{t(L, "loading")}</h1>}
+          </section>
 
-        <button className="menu-toggle" aria-expanded={menuOpen} onClick={() => setMenuOpen((o) => !o)}>
-          {t(L, "layers")}{layer ? `: ${tx(layer.title, L)}` : ""}
-        </button>
-        {run ? <LayerMenu run={run} value={layerId} onChange={(id) => { setLayerId(id); setMenuOpen(false); }} lang={L} /> : null}
-
-        {profile ? (
-          <footer className="rail-foot">
-            {profile.attribution ? <p>{tx(profile.attribution, L)}</p> : null}
-            {profile.links.length ? (
-              <p>
-                {t(L, "sources")}:{" "}
-                {profile.links.map((l, i) => (
-                  <span key={l.url}>{i ? ", " : ""}<a href={l.url} target="_blank" rel="noreferrer">{tx(l.name, L)}</a></span>
+          {run ? (
+            <>
+              <div className="tabs" role="tablist">
+                {tabs.map((x) => (
+                  <button key={x.id} type="button" role="tab" aria-selected={tab === x.id}
+                          className={tab === x.id ? "is-on" : ""} onClick={() => openTab(x.id)}>
+                    {x.icon}{x.label}
+                  </button>
                 ))}
-              </p>
-            ) : null}
-          </footer>
-        ) : null}
-      </section>
+              </div>
+              <div className="side-body" role="tabpanel">
+                {tab === "outlook" ? (
+                  <OutlookPanel run={run} value={layerId} lang={L}
+                                onChange={(id) => { setLayerId(id); setMobileOpen(false); }} />
+                ) : null}
+                {tab === "areas" && areasLevel ? (
+                  <AreasPanel run={run} lang={L} level={areasLevel} onLevel={setAreasLevel} summary={areasSummary}
+                              layer={layer} selectedId={selection?.kind === "area" ? selection.id : null} onPick={pickArea} />
+                ) : null}
+                {tab === "data" && profile ? <DataPanel run={run} profile={profile} layer={layer} lang={L} /> : null}
+              </div>
+            </>
+          ) : null}
+        </aside>
+      )}
 
       <main className="stage">
         {run && profile ? (
@@ -200,15 +271,23 @@ export default function Dashboard({ country, query: q }: { country: string; quer
             lang={L}
             center={profile.map.center}
             zoom={profile.map.zoom}
-            basemap={profile.map.basemap}
+            basemap={basemap}
+            opacity={opacity}
+            focus={focus}
+            onReady={setMapObj}
           />
         ) : <div className="map" />}
+
+        {run ? (
+          <MapControls map={mapObj} bbox={run.bbox} basemap={basemap.id} options={basemaps} onBasemap={setBasemapId}
+                       labels={{ zoomIn: t(L, "zoomIn"), zoomOut: t(L, "zoomOut"), fit: t(L, "fit"), basemap: t(L, "basemap") }} />
+        ) : null}
 
         {run && run.areas.length ? (
           <div className="showby" role="group" aria-label={t(L, "showBy")}>
             <span>{t(L, "showBy")}</span>
             {[{ level: GRID, label: t(L, "grid") }, ...run.areas.map((a) => ({ level: a.level, label: tx(a.label, L) }))].map((o) => (
-              <button key={o.level} className={by === o.level ? "is-on" : ""} aria-pressed={by === o.level}
+              <button key={o.level} type="button" className={by === o.level ? "is-on" : ""} aria-pressed={by === o.level}
                       onClick={() => { setBy(o.level); setSelection(null); }}>
                 {o.label}
               </button>
@@ -216,7 +295,11 @@ export default function Dashboard({ country, query: q }: { country: string; quer
           </div>
         ) : null}
 
-        {run && layer ? <div className="legend-dock"><Legend layer={layer} lang={L} init={run.init} /></div> : null}
+        {run && layer ? (
+          <div className="legend-dock">
+            <Legend layer={layer} lang={L} init={run.init} groupIcon={groupIcon} opacity={opacity} onOpacity={setOpacity} />
+          </div>
+        ) : null}
 
         {run && selection ? (
           <DetailPanel run={run} selection={selection} area={selArea} parents={parents} levelLabel={selLevelLabel}

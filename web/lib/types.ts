@@ -2,10 +2,15 @@
 
 export type Text = string | Record<string, string>;
 
+export interface CountryTheme { primary?: string; accent?: string }
+
 export interface CountrySummary {
   id: string;
   name: Text;
   flag: string;
+  iso2?: string | null;
+  description?: Text | null;
+  theme?: CountryTheme | null;
   languages: string[];
   default_language: string;
   latest: { init: string; season: Season } | null;
@@ -20,6 +25,9 @@ export interface Profile {
   id: string;
   name: Text;
   flag: string;
+  iso2?: string | null;
+  description?: Text | null;
+  theme?: CountryTheme | null;
   languages: string[];
   default_language: string;
   map: { center: [number, number] | null; zoom: number; bbox: number[] | null; basemap: string | null };
@@ -72,7 +80,7 @@ export interface RunView {
   created: string;
   bbox: [number, number, number, number];
   layers: Record<string, LayerInfo>;
-  groups: { id: string; label: Text; layers: string[] }[];
+  groups: { id: string; label: Text; layers: string[]; icon?: string | null }[];
   default_layer: string | null;
   areas: AreaLevel[];
   point_query: boolean;
