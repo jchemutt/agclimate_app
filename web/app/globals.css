@@ -17,6 +17,9 @@
   --primary-dark: #154e55;
   --primary-soft: rgba(31, 111, 120, 0.12);
   --accent: #c98a2b;
+  /* season card: neutral ink, so brown/teal stay reserved for dry/wet on the map */
+  --card-hi: #34393a;
+  --card-lo: #1f2425;
   --frost: rgba(251, 248, 241, 0.94);
   --bn: rgba(191, 129, 45, 0.2);
   --nn: rgba(120, 130, 130, 0.12);
@@ -80,14 +83,14 @@ button { cursor: pointer; }
 .top-link { color: rgba(247, 240, 226, 0.8); font-weight: 600; font-size: 13px; background: rgba(0, 0, 0, 0.2); }
 .top-link:hover { color: var(--cream); border-color: rgba(242, 211, 138, 0.45); }
 
-.landing-body { flex: 1; display: grid; grid-template-columns: 0.85fr 1.15fr; gap: 40px; align-items: center; padding: 32px 0; }
+.landing-body { flex: 1; display: grid; grid-template-columns: 0.9fr 1.1fr; gap: 40px; align-items: start; padding: clamp(28px, 6vh, 64px) 0 32px; }
 .kicker { margin: 0; color: rgba(242, 211, 138, 0.85); font-weight: 700; letter-spacing: 0.04em; font-size: 15px; }
 .landing-copy h1 {
-  margin: 14px 0 0; font-size: clamp(36px, 4.6vw, 60px); line-height: 1.03; letter-spacing: -0.02em;
-  font-weight: 800; max-width: 15ch; color: #fffaf0; text-wrap: balance;
+  margin: 14px 0 0; font-size: clamp(34px, 3.4vw, 50px); line-height: 1.06; letter-spacing: -0.02em;
+  font-weight: 800; max-width: 18ch; color: #fffaf0; text-wrap: balance;
 }
-.lede { margin: 20px 0 0; font-size: 18px; line-height: 1.65; color: rgba(247, 240, 226, 0.8); max-width: 46ch; }
-.features { margin-top: 30px; display: grid; gap: 10px; max-width: 520px; }
+.lede { margin: 18px 0 0; font-size: 17px; line-height: 1.65; color: rgba(247, 240, 226, 0.8); max-width: 46ch; }
+.features { margin-top: 26px; display: grid; gap: 10px; max-width: 520px; }
 .feature { display: grid; grid-template-columns: auto 1fr; gap: 1px 14px; align-items: center;
   border: 1px solid rgba(242, 211, 138, 0.16); background: rgba(255, 255, 255, 0.06);
   border-radius: var(--r); padding: 12px 16px; backdrop-filter: blur(6px); }
@@ -96,7 +99,7 @@ button { cursor: pointer; }
 .feature-title { margin: 0; font-weight: 800; font-size: 15px; color: #fffaf0; }
 .feature-text { margin: 0; font-size: 13.5px; line-height: 1.45; color: rgba(247, 240, 226, 0.72); }
 
-.landing-pick { display: grid; grid-template-columns: minmax(340px, 1.1fr) 0.9fr; gap: 24px; align-items: center; }
+.landing-pick { display: grid; grid-template-columns: minmax(340px, 1.1fr) 0.9fr; gap: 24px; align-items: start; padding-top: 34px; }
 .picker { position: relative; z-index: 2; border-radius: 28px; border: 1px solid rgba(242, 211, 138, 0.18);
   background: rgba(255, 255, 255, 0.08); backdrop-filter: blur(12px); padding: 20px; box-shadow: var(--shadow-lg); }
 .picker-head { display: flex; justify-content: space-between; align-items: center; }
@@ -125,7 +128,7 @@ button { cursor: pointer; }
   background: var(--gold); color: #1f1a0e; font-weight: 800; font-size: 14px; transition: transform 160ms ease; }
 .country-card:hover .open-pill { transform: translateX(3px); }
 
-.globe-wrap { position: relative; display: grid; place-items: center; min-height: 360px; }
+.globe-wrap { position: relative; display: grid; justify-items: center; align-content: start; gap: 4px; }
 .globe-halo { position: absolute; width: min(460px, 80vw); aspect-ratio: 1; border-radius: 50%;
   background: rgba(38, 128, 140, 0.25); filter: blur(48px); }
 .globe { position: relative; width: min(360px, 72vw); aspect-ratio: 1; filter: drop-shadow(0 28px 60px rgba(0, 0, 0, 0.5)); }
@@ -159,9 +162,10 @@ button { cursor: pointer; }
 
 .season-card { margin: 12px 18px 0; padding: 18px; border-radius: var(--r-lg); color: #fffaf0;
   background:
-    radial-gradient(circle at 100% 0%, rgba(242, 211, 138, 0.35), transparent 50%),
-    linear-gradient(140deg, var(--primary) 0%, var(--primary-dark) 100%);
-  box-shadow: 0 10px 26px rgba(21, 78, 85, 0.28); }
+    radial-gradient(circle at 100% 0%, rgba(242, 211, 138, 0.22), transparent 55%),
+    linear-gradient(150deg, var(--card-hi) 0%, var(--card-lo) 100%);
+  border-left: 4px solid var(--gold);
+  box-shadow: 0 10px 26px rgba(30, 28, 22, 0.22); }
 .season-card h1 { margin: 2px 0 4px; font-size: 28px; line-height: 1.08; font-weight: 800; letter-spacing: -0.01em; text-wrap: balance; }
 .season-card p { margin: 0; font-size: 14px; color: rgba(255, 250, 240, 0.9); }
 .season-sub { font-weight: 700; color: var(--gold) !important; font-size: 13px !important; }
@@ -353,7 +357,8 @@ button { cursor: pointer; }
 @media (max-width: 1100px) {
   .landing-body { grid-template-columns: 1fr; }
   .landing-pick { grid-template-columns: 1fr; }
-  .globe-wrap { order: -1; min-height: 300px; }
+  .landing-pick { padding-top: 0; }
+  .globe-wrap { order: -1; }
 }
 @media (max-width: 900px) {
   .app, .app.is-collapsed { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
