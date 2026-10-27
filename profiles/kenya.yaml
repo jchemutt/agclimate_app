@@ -5,8 +5,8 @@ name: {en: Kenya, sw: Kenya}
 flag: "🇰🇪"
 iso2: KE
 description:
-  en: Rainfall, drought and heat outlooks with advisories for 47 counties, down to the ward.
-  sw: Utabiri wa mvua, ukame na joto pamoja na ushauri kwa kaunti 47, hadi ngazi ya wadi.
+  en: Rainfall, season timing, crop, drought, heat and livestock outlooks with advisories for 47 counties, down to the ward.
+  sw: Utabiri wa mvua, wakati wa msimu, mazao, ukame, joto na mifugo pamoja na ushauri kwa kaunti 47, hadi ngazi ya wadi.
 theme: {primary: "#1f6f78", accent: "#c98a2b"}   # optional per-country colours
 languages: [en, sw]
 default_language: en
@@ -33,26 +33,40 @@ seasons:                       # forecast start month -> season name
     start_months: [6, 7]
 default_season_label: {en: Seasonal outlook, sw: Utabiri wa msimu}
 
-layer_groups:
+layer_groups:                  # order = order in the layer menu; layers missing from a run are hidden
   - id: advisory
     label: {en: Advisory, sw: Ushauri}
-    layers: [advisory_class]
+    layers: [advisory_class, livelihood_stress, resilience_opportunity]
   - id: rainfall
     label: {en: Rainfall, sw: Mvua}
     layers: [rain_tercile_most_likely, rain_prob_below_normal, rain_prob_above_normal,
-             rainfall_anomaly_percent, rainfall_total]
+             rainfall_anomaly_percent, rainfall_total, rainfall_percentile,
+             dry_spell_max, wet_spell_max, heavy_rain_days, very_heavy_rain_days]
   - id: season
-    label: {en: Season timing, sw: Mwanzo wa msimu}
-    layers: [onset_day, false_start_prob]
+    label: {en: Season timing, sw: Wakati wa msimu}
+    layers: [onset_day, false_start_prob, cessation_day, growing_period]
+  - id: crops
+    label: {en: Crops and soil water, sw: Mazao na maji ya udongo}
+    layers: [crop_water_stress, water_balance, input_timing, reference_et, growing_degree_days]
   - id: drought
     label: {en: Drought, sw: Ukame}
-    layers: [drought_prob_spi3, spi_3]
+    layers: [drought_prob_spi3, spi_3, drought_prob_spei3, spei_3, agro_pastoral_drought]
   - id: heat
     label: {en: Heat, sw: Joto}
-    layers: [heat_stress_days]
+    layers: [heat_stress_days, hot_nights]
+  - id: livestock
+    label: {en: Livestock and pasture, sw: Mifugo na malisho}
+    layers: [thi_risk_class, livestock_heat_days, pasture_drought, forage_growth, feed_water_stress,
+             crop_residue, livestock_water_need, vector_suitability]
+  - id: pastoral
+    label: {en: "Mobility, water and hazards", sw: "Uhamaji, maji na hatari"}
+    layers: [mobility_stress, grazing_conflict, water_pressure, surface_water_stress, mud_wetness, dust_dryness]
 default_layer: advisory_class
 
+# Titles and short descriptions per language (English falls back to the pipeline's text).
+# Kiswahili wording: please have a native speaker review before wide release.
 layer_overrides:
+  # ---- advisory
   advisory_class:
     title: {en: Seasonal advisory, sw: Ushauri wa msimu}
     classes:
@@ -60,6 +74,18 @@ layer_overrides:
       1: {en: Watch, sw: Tahadhari}
       2: {en: Alert, sw: Onyo}
       3: {en: Emergency, sw: Dharura}
+  livelihood_stress:
+    title: {en: Livelihood stress, sw: Shinikizo kwa maisha}
+    description:
+      en: Combined pressure on crops and livestock, compared with the same season in 1991–2020.
+      sw: Shinikizo la pamoja kwa mazao na mifugo, ikilinganishwa na msimu huohuo 1991–2020.
+  resilience_opportunity:
+    title: {en: Good-season opportunity, sw: Fursa ya msimu mzuri}
+    description:
+      en: Where good rain, mild heat and a long growing period line up – a chance to invest or expand.
+      sw: Mahali mvua nzuri, joto la wastani na kipindi kirefu cha ukuaji vinakutana – fursa ya kuwekeza.
+
+  # ---- rainfall
   rain_tercile_most_likely:
     title: {en: Most likely rainfall, sw: Mvua inayotarajiwa zaidi}
     classes:
@@ -70,11 +96,128 @@ layer_overrides:
   rain_prob_above_normal: {title: {en: Chance of above-normal rainfall, sw: Uwezekano wa mvua juu ya kawaida}}
   rainfall_anomaly_percent: {title: {en: Rainfall compared with normal, sw: Mvua ikilinganishwa na kawaida}}
   rainfall_total: {title: {en: Expected rainfall total, sw: Jumla ya mvua inayotarajiwa}}
+  rainfall_percentile:
+    title: {en: Rainfall rank against past years, sw: Nafasi ya mvua dhidi ya miaka iliyopita}
+    description:
+      en: Where the forecast total sits among 1991–2020 (50 = a typical year, 10 = one of the driest).
+      sw: Nafasi ya jumla ya mvua kati ya miaka 1991–2020 (50 = mwaka wa kawaida, 10 = mojawapo ya mikavu zaidi).
+  dry_spell_max:
+    title: {en: Longest dry spell, sw: Kipindi kirefu zaidi cha ukavu}
+    description: {en: Longest run of days with less than 1 mm of rain., sw: Siku nyingi mfululizo zenye mvua chini ya mm 1.}
+  wet_spell_max:
+    title: {en: Longest wet spell, sw: Kipindi kirefu zaidi cha mvua}
+    description: {en: Longest run of days with at least 1 mm of rain., sw: Siku nyingi mfululizo zenye mvua ya mm 1 au zaidi.}
+  heavy_rain_days: {title: {en: Heavy-rain days (20 mm+), sw: Siku za mvua kubwa (mm 20+)}}
+  very_heavy_rain_days:
+    title: {en: Very heavy rain days (50 mm+), sw: Siku za mvua kubwa sana (mm 50+)}
+    description:
+      en: Days that can bring flash floods, waterlogging and washed-out roads.
+      sw: Siku zinazoweza kuleta mafuriko ya ghafla, maji kutuama na barabara kuharibika.
+
+  # ---- season timing
   onset_day: {title: {en: Rainy-season onset, sw: Mwanzo wa mvua}}
   false_start_prob: {title: {en: Chance of a false start, sw: Uwezekano wa mwanzo wa uongo}}
-  drought_prob_spi3: {title: {en: Chance of drought, sw: Uwezekano wa ukame}}
+  cessation_day:
+    title: {en: End of the rainy season, sw: Mwisho wa msimu wa mvua}
+    description:
+      en: When the soil is expected to dry out after the rains.
+      sw: Wakati udongo unatarajiwa kukauka baada ya mvua.
+  growing_period:
+    title: {en: Length of growing period, sw: Urefu wa kipindi cha ukuaji}
+    description:
+      en: Days between onset and the end of the season – compare with your crop's days to maturity.
+      sw: Siku kati ya mwanzo na mwisho wa msimu – linganisha na siku ambazo zao lako huhitaji kukomaa.
+
+  # ---- crops and soil water
+  crop_water_stress:
+    title: {en: Crop water stress, sw: Upungufu wa maji kwa mazao}
+    description:
+      en: How far rain and soil water fall short of what a crop needs (0 = none, 1 = severe).
+      sw: Kiasi ambacho mvua na maji ya udongo hupungua dhidi ya mahitaji ya zao (0 = hakuna, 1 = kali).
+  water_balance:
+    title: {en: Water balance (rain minus crop need), sw: Mizani ya maji (mvua kutoa mahitaji ya zao)}
+  input_timing:
+    title: {en: Suitability for planting and inputs, sw: Ufaafu wa kupanda na pembejeo}
+    description:
+      en: How favourable onset, rainfall and dry-spell risk are for buying seed and fertiliser on time.
+      sw: Jinsi mwanzo wa mvua, kiasi cha mvua na hatari ya ukavu vinavyofaa kununua mbegu na mbolea kwa wakati.
+  reference_et:
+    title: {en: Evaporative demand (ET0), sw: Mahitaji ya uvukizaji (ET0)}
+    description:
+      en: How much water the air pulls from soil and plants (FAO-56).
+      sw: Kiasi cha maji ambacho hewa huvuta kutoka udongo na mimea (FAO-56).
+  growing_degree_days: {title: {en: Growing degree days, sw: Joto la ukuaji (siku-digrii)}}
+
+  # ---- drought
+  drought_prob_spi3: {title: {en: Chance of drought (rainfall), sw: Uwezekano wa ukame (mvua)}}
   spi_3: {title: {en: Drought index (SPI-3), sw: Kiashiria cha ukame (SPI-3)}}
+  drought_prob_spei3:
+    title: {en: Chance of drought (rain and heat), sw: Uwezekano wa ukame (mvua na joto)}
+    description:
+      en: Like the rainfall index but also counts evaporation, so it picks up heat-driven drought.
+      sw: Kama kiashiria cha mvua lakini huhesabu pia uvukizaji, hivyo hutambua ukame unaotokana na joto.
+  spei_3: {title: {en: Drought index (SPEI-3), sw: Kiashiria cha ukame (SPEI-3)}}
+  agro_pastoral_drought:
+    title: {en: Agro-pastoral drought risk, sw: Hatari ya ukame kwa wakulima na wafugaji}
+
+  # ---- heat
   heat_stress_days: {title: {en: Heat-stress days, sw: Siku za joto kali}}
+  hot_nights:
+    title: {en: Hot nights (24 °C+), sw: Usiku wenye joto (24 °C+)}
+    description:
+      en: Nights too warm for people, animals and crops to recover from daytime heat.
+      sw: Usiku wenye joto kiasi kwamba watu, mifugo na mazao hawapumziki kutokana na joto la mchana.
+
+  # ---- livestock and pasture
+  thi_risk_class:
+    title: {en: Peak livestock heat stress, sw: Kiwango cha juu cha joto kwa mifugo}
+    classes:
+      0: {en: Low, sw: Chini}
+      1: {en: Mild, sw: Kidogo}
+      2: {en: Moderate, sw: Wastani}
+      3: {en: Severe, sw: Kali}
+      4: {en: Emergency, sw: Dharura}
+    description:
+      en: Temperature–humidity index (THI) on the hottest days of the season.
+      sw: Kiashiria cha joto na unyevu (THI) katika siku zenye joto zaidi za msimu.
+  livestock_heat_days: {title: {en: Livestock heat-stress days, sw: Siku za joto kali kwa mifugo}}
+  pasture_drought:
+    title: {en: Pasture drought, sw: Ukame wa malisho}
+    description:
+      en: Rain deficit, high evaporation and dry soils together – how hard pasture will be hit.
+      sw: Upungufu wa mvua, uvukizaji mkubwa na udongo mkavu – jinsi malisho yatakavyoathirika.
+  forage_growth:
+    title: {en: Forage growth outlook, sw: Matarajio ya ukuaji wa malisho}
+    description:
+      en: How favourable rain, soil moisture and temperature are for grass and browse.
+      sw: Jinsi mvua, unyevu wa udongo na joto vinavyofaa kwa nyasi na majani ya miti.
+  feed_water_stress: {title: {en: Feed and water stress, sw: Upungufu wa lishe na maji}}
+  crop_residue: {title: {en: Crop residue (feed) outlook, sw: Matarajio ya mabaki ya mazao (lishe)}}
+  livestock_water_need: {title: {en: Livestock drinking-water need, sw: Mahitaji ya maji ya kunywa kwa mifugo}}
+  vector_suitability:
+    title: {en: Disease-vector conditions, sw: Mazingira ya wadudu waenezao magonjwa}
+    description:
+      en: How suitable rain, humidity and temperature are for ticks, flies and mosquitoes.
+      sw: Jinsi mvua, unyevu na joto vinavyofaa kwa kupe, nzi na mbu.
+
+  # ---- mobility, water and hazards
+  mobility_stress:
+    title: {en: Herd mobility stress, sw: Shinikizo la kuhamisha mifugo}
+    description:
+      en: Pressure to move herds early or far in search of pasture and water.
+      sw: Shinikizo la kuhamisha mifugo mapema au mbali kutafuta malisho na maji.
+  grazing_conflict:
+    title: {en: Planting–grazing conflict risk, sw: Hatari ya mgogoro wa kilimo na malisho}
+    description:
+      en: Where herds are likely to move into farmed areas around planting time.
+      sw: Mahali mifugo inaweza kuingia mashambani wakati wa kupanda.
+  water_pressure: {title: {en: Pressure on shared water, sw: Shinikizo kwa vyanzo vya maji vya pamoja}}
+  surface_water_stress:
+    title: {en: Surface-water stress (pans and dams), sw: Upungufu wa maji ya juu (mabwawa)}
+  mud_wetness:
+    title: {en: Mud and waterlogging risk, sw: Hatari ya matope na maji kutuama}
+  dust_dryness:
+    title: {en: Dust and dryness risk, sw: Hatari ya vumbi na ukavu}
 
 advisories:                    # shown with the advisory class of the selected area
   advisory_class:

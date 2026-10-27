@@ -3,6 +3,7 @@ import { t, tx } from "@/lib/i18n";
 import { areaNumber, fmtValue } from "@/lib/format";
 import { colorFor, css } from "@/lib/color";
 import MemberChart from "./MemberChart";
+import { GroupIcon } from "./icons";
 
 interface Props {
   run: RunView;
@@ -13,14 +14,15 @@ interface Props {
   point: PointResult | null | "loading" | "error";
   lang: string;
   onClose: () => void;
+  current?: string | null;                 // layer on the map: its group opens, its row is marked
+  onLayer?: (id: string) => void;          // click a value to show that layer
 }
 
 const ADVISORY = "advisory_class";
 
-export default function DetailPanel({ run, selection, area, parents, levelLabel, point, lang, onClose }: Props) {
+export default function DetailPanel({ run, selection, area, parents, levelLabel, point, lang, onClose, current, onLayer }: Props) {
   const isArea = selection.kind === "area" && area;
   const pt = typeof point === "object" ? point : null;
-  const ids = run.groups.flatMap((g) => g.layers);
   const value = (id: string): number | null =>
     isArea ? areaNumber(area!.values[id] ?? null) : pt ? pt.layers[id] ?? null : null;
 
@@ -57,19 +59,42 @@ export default function DetailPanel({ run, selection, area, parents, levelLabel,
       ) : null}
 
       {!outside && (isArea || pt) ? (
-        <dl className="values">
-          {ids.filter((id) => id !== ADVISORY).map((id) => {
-            const l = run.layers[id];
-            const v = value(id);
-            const c = colorFor(v, l.legend);
+        <div className="value-groups">
+          {run.groups.map((g) => {
+            const ids = g.layers.filter((id) => id !== ADVISORY && run.layers[id]);
+            if (!ids.length) return null;
+            const here = g.layers.includes(current ?? "") || run.groups.length === 1;
             return (
-              <div key={id} className="value-row">
-                <dt><span className="dot" style={{ background: css(c) }} />{tx(l.title, lang)}</dt>
-                <dd>{fmtValue(v, l.legend, run.init, lang)}</dd>
-              </div>
+              <details key={`${g.id}:${here}`} className="value-group" open={here}>
+                <summary>
+                  <span className="group-icon"><GroupIcon name={g.icon ?? g.id} size={15} /></span>
+                  <span>{tx(g.label, lang)}</span>
+                  <span className="group-count">{ids.length}</span>
+                </summary>
+                <dl className="values">
+                  {ids.map((id) => {
+                    const l = run.layers[id];
+                    const v = value(id);
+                    const c = colorFor(v, l.legend);
+                    const label = (
+                      <>
+                        <dt><span className="dot" style={{ background: css(c) }} />{tx(l.title, lang)}</dt>
+                        <dd>{fmtValue(v, l.legend, run.init, lang)}</dd>
+                      </>
+                    );
+                    return onLayer ? (
+                      <div key={id} className={`value-row is-link${id === current ? " is-on" : ""}`} role="button" tabIndex={0}
+                           aria-current={id === current} onClick={() => onLayer(id)}
+                           onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onLayer(id); } }}>
+                        {label}
+                      </div>
+                    ) : <div key={id} className="value-row">{label}</div>;
+                  })}
+                </dl>
+              </details>
             );
           })}
-        </dl>
+        </div>
       ) : null}
       {isArea ? <p className="muted small">{t(lang, "areaAverage")}</p> : null}
 

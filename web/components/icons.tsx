@@ -1,5 +1,5 @@
 import {
-  CalendarDays, CloudRain, Layers, Megaphone, SunMedium, Thermometer, type LucideIcon,
+  CalendarDays, CloudRain, Droplets, Layers, Megaphone, PawPrint, Route, Sprout, SunMedium, Thermometer, type LucideIcon,
 } from "lucide-react";
 
 // Layer-group icons, picked by the profile's group `icon` (or its id).
@@ -12,6 +12,12 @@ const ICONS: Record<string, LucideIcon> = {
   drought: SunMedium,
   heat: Thermometer,
   temperature: Thermometer,
+  crops: Sprout,
+  water: Droplets,
+  livestock: PawPrint,
+  pasture: PawPrint,
+  pastoral: Route,
+  mobility: Route,
   layers: Layers,
 };
 

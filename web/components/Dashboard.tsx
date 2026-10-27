@@ -15,6 +15,8 @@ import Flag from "./Flag";
 import Legend from "./Legend";
 import MapControls from "./MapControls";
 import DetailPanel, { findArea } from "./DetailPanel";
+import { GroupIcon } from "./icons";
+import { groupOf, stepLayer } from "@/lib/layers";
 import OutlookPanel from "./sidebar/OutlookPanel";
 import AreasPanel from "./sidebar/AreasPanel";
 import DataPanel from "./sidebar/DataPanel";
@@ -129,8 +131,6 @@ export default function Dashboard({ country, query: q }: { country: string; quer
 
   const L = lang || profile?.default_language || "en";
 
-  if (error === "missing") return <Message lang={L} text={t(L, "countryMissing")} />;
-  if (error === "failed") return <Message lang={L} text={t(L, "loadFailed")} />;
 
   const summary = run && level ? summaries[`${run.init}/${level.level}`] ?? null : null;
   const areasSummary = run && areasLevel ? summaries[`${run.init}/${areasLevel}`] ?? null : null;
@@ -147,7 +147,36 @@ export default function Dashboard({ country, query: q }: { country: string; quer
     }
   }
   const selLevelLabel = selection?.kind === "area" ? tx(run?.areas.find((a) => a.level === selection.level)?.label, L) : "";
-  const groupIcon = run?.groups.find((g) => g.layers.includes(layerId ?? ""))?.icon ?? null;
+  const group = run ? groupOf(run, layerId) : null;
+  const groupIcon = group?.icon ?? null;
+  const position: [number, number] | undefined = group && layerId
+    ? [group.layers.filter((id) => run?.layers[id]).indexOf(layerId) + 1, group.layers.filter((id) => run?.layers[id]).length]
+    : undefined;
+  const step = useCallback((d: number) => {
+    if (run) setLayerId((id) => stepLayer(run, id, d) ?? id);
+  }, [run]);
+  // "[" and "]" step through the layers from anywhere except form fields
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement | null;
+      const typing = el && (/^(SELECT|TEXTAREA)$/.test(el.tagName) || el.isContentEditable ||
+        (el.tagName === "INPUT" && !["radio", "checkbox", "range", "button"].includes((el as HTMLInputElement).type)));
+      if (e.ctrlKey || e.metaKey || e.altKey || typing) return;
+      if (e.key === "[") step(-1);
+      else if (e.key === "]") step(1);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [step]);
+  /** Rail shortcut: keep the current layer if it's in the group, else the group's first layer. */
+  const pickGroup = (gid: string) => {
+    const g = run?.groups.find((x) => x.id === gid);
+    const first = g?.layers.find((id) => run?.layers[id]);
+    if (g && first) setLayerId((id) => (id && g.layers.includes(id) ? id : first));
+  };
+
+  if (error === "missing") return <Message lang={L} text={t(L, "countryMissing")} />;
+  if (error === "failed") return <Message lang={L} text={t(L, "loadFailed")} />;
 
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
     { id: "outlook", label: t(L, "tabOutlook"), icon: <Layers size={16} aria-hidden /> },
@@ -178,6 +207,17 @@ export default function Dashboard({ country, query: q }: { country: string; quer
             <button key={x.id} type="button" className={`rail-btn${tab === x.id ? " is-on" : ""}`}
                     onClick={() => openTab(x.id)} title={x.label} aria-label={x.label}>{x.icon}</button>
           ))}
+          {run && run.groups.length > 1 ? (
+            <div className="rail-groups" role="group" aria-label={t(L, "layers")}>
+              {run.groups.map((g) => (
+                <button key={g.id} type="button" className={`rail-btn${group?.id === g.id ? " is-on" : ""}`}
+                        onClick={() => pickGroup(g.id)} title={tx(g.label, L)} aria-label={tx(g.label, L)}
+                        aria-pressed={group?.id === g.id}>
+                  <GroupIcon name={g.icon ?? g.id} size={18} />
+                </button>
+              ))}
+            </div>
+          ) : null}
           <Link href="/" className="rail-btn rail-home" title={t(L, "home")} aria-label={t(L, "home")}><Home size={18} /></Link>
         </nav>
       ) : (
@@ -297,13 +337,18 @@ export default function Dashboard({ country, query: q }: { country: string; quer
 
         {run && layer ? (
           <div className="legend-dock">
-            <Legend layer={layer} lang={L} init={run.init} groupIcon={groupIcon} opacity={opacity} onOpacity={setOpacity} />
+            <Legend layer={layer} lang={L} init={run.init} groupIcon={groupIcon} opacity={opacity} onOpacity={setOpacity}
+                    groupLabel={group ? tx(group.label, L) : undefined} position={position} onStep={step}
+                    picker={(close) => (
+                      <OutlookPanel run={run} value={layerId} lang={L} autoFocus
+                                    onChange={(id) => { setLayerId(id); close(); }} />
+                    )} />
           </div>
         ) : null}
 
         {run && selection ? (
           <DetailPanel run={run} selection={selection} area={selArea} parents={parents} levelLabel={selLevelLabel}
-                       point={point} lang={L} onClose={() => setSelection(null)} />
+                       point={point} lang={L} onClose={() => setSelection(null)} current={layerId} onLayer={setLayerId} />
         ) : run ? <p className="hint">{t(L, "clickHint")}</p> : null}
       </main>
     </div>

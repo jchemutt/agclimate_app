@@ -6,7 +6,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "AgClimate AF seasonal outlook",
-  description: "Seasonal rainfall, drought and heat outlooks with advisories for farmers and pastoralists.",
+  description: "Seasonal outlooks for rainfall, season timing, crops, drought, heat and livestock, with advisories for farmers and pastoralists.",
 };
 
 export const viewport: Viewport = { width: "device-width", initialScale: 1, themeColor: "#eef2ee" };

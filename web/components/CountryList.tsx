@@ -38,12 +38,12 @@ export default function CountryList() {
             <p className="kicker">Forecast. Localise. Advise.</p>
             <h1>Seasonal climate outlooks for farmers and pastoralists</h1>
             <p className="lede">
-              Rainfall, drought and heat for the coming months, turned into advisories for every
+              Rainfall, drought, heat, crop water and livestock conditions for the coming months, turned into advisories for every
               administrative area, in the languages people use.
             </p>
             <div className="features">
               <Feature icon={<CloudRain size={18} />} title="Forecast"
-                       text="Rainfall, drought and heat for the next six months" />
+                       text="Over 40 indicators: rainfall, season timing, crops, drought, heat and livestock" />
               <Feature icon={<MapPinned size={18} />} title="Localise"
                        text="From the whole country down to the ward" />
               <Feature icon={<Megaphone size={18} />} title="Advise"

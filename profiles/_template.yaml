@@ -41,7 +41,9 @@ default_season_label: Seasonal outlook
 #   false_start_prob, drought_prob_spi3, spi_3, heat_stress_days
 # Published layers not listed here appear under "More layers".
 layer_groups:
-  # icon (optional): advisory, rainfall, season, drought, heat, layers (default: the group id)
+  # icon (optional): advisory, rainfall, season, crops, drought, heat, livestock, pastoral, water, layers
+  # (default: the group id). Layer ids the pipeline publishes: see kenya.yaml (43 layers in 8 groups).
+  # Layers you leave out of every group appear under "More layers".
   - {id: advisory, label: Advisory, layers: [advisory_class]}
   - {id: rainfall, label: Rainfall, layers: [rain_tercile_most_likely, rainfall_anomaly_percent]}
 default_layer: advisory_class

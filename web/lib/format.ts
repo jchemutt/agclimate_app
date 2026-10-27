@@ -29,6 +29,7 @@ export function fmtValue(v: number | null | undefined, legend: Legend | null, in
     const c = legend.classes?.find((k) => k.value === Math.round(v));
     return c ? tx(c.label, lang) : String(v);
   }
+  if (legend?.format === "index") return `${indexLabel(v, lang)} (${v.toFixed(2)})`;
   if (legend?.format === "days_from_init") {
     return `${t(lang, "around")} ${fmtDate(addDays(init, v), lang, { day: "numeric", month: "long" })}`;
   }
@@ -46,7 +47,13 @@ export function areaNumber(v: AreaValue): number | null {
   return v.mean;
 }
 
+/** 0-1 scores from the indices engine, in plain words (thirds of the 0-1 range). */
+export function indexLabel(v: number, lang: string): string {
+  return t(lang, v < 1 / 3 ? "indexLow" : v < 2 / 3 ? "indexModerate" : "indexHigh");
+}
+
 export function legendTicks(legend: Legend, lang: string, init: string): string[] {
+  if (legend.format === "index") return ["indexLow", "indexModerate", "indexHigh"].map((k) => t(lang, k));
   const [lo, hi] = legend.range ?? [0, 1];
   const mid = (lo + hi) / 2;
   return [lo, mid, hi].map((x) =>

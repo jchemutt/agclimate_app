@@ -51,7 +51,7 @@ class LayerGroup(_M):
     id: str
     label: Text
     layers: list[str]
-    icon: str | None = None                             # advisory, rainfall, season, drought, heat, layers
+    icon: str | None = None   # advisory, rainfall, season, crops, drought, heat, livestock, pastoral, water, layers
 
 
 class Theme(_M):
