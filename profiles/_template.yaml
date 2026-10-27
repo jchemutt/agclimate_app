@@ -1,0 +1,61 @@
+# Country profile template. Copy to <id>.yaml (files starting with "_" are ignored).
+# The API picks up new or edited profiles without a restart.
+#
+# Any user-facing text can be a plain string or a per-language map:
+#   label: District
+#   label: {en: District, fr: District, rw: Akarere}
+
+id: rwanda                     # REQUIRED. Lower case; equals the pipeline domain name
+                               # (config `name:`), i.e. s3://<bucket>/published/rwanda/
+name: {en: Rwanda}             # REQUIRED
+flag: "🇷🇼"
+languages: [en]                # first one is the default unless default_language is set
+default_language: en
+hidden: false                  # true = keep the profile but leave it out of the country list
+
+map:
+  center: [29.9, -1.95]        # lon, lat of the initial view
+  zoom: 8
+  bbox: [28.8, -2.9, 30.9, -1.0]   # optional; otherwise the run's grid extent
+  # basemap: "https://tile.openstreetmap.org/{z}/{x}/{y}.png"   # optional XYZ template
+
+# Admin levels in display order. Each id must match a level the pipeline
+# published (prep `publish.levels` + the boundaries GeoPackage layers).
+admin_levels:
+  - {id: province, label: Province}
+  - {id: district, label: District}
+  - {id: sector, label: Sector}
+
+# Forecast start month -> season name. Months not listed use default_season_label.
+seasons:
+  - {id: SOND, label: "Season A (Sep–Dec)", start_months: [8, 9]}
+  - {id: MAM, label: "Season B (Mar–May)", start_months: [2, 3]}
+default_season_label: Seasonal outlook
+
+# Layer menu. Ids are the layer ids published by prep (publish.DEFAULT_LAYERS):
+#   advisory_class, rain_tercile_most_likely, rain_prob_below_normal,
+#   rain_prob_above_normal, rainfall_anomaly_percent, rainfall_total, onset_day,
+#   false_start_prob, drought_prob_spi3, spi_3, heat_stress_days
+# Published layers not listed here appear under "More layers".
+layer_groups:
+  - {id: advisory, label: Advisory, layers: [advisory_class]}
+  - {id: rainfall, label: Rainfall, layers: [rain_tercile_most_likely, rainfall_anomaly_percent]}
+default_layer: advisory_class
+
+# Optional per-country titles, descriptions and class names.
+layer_overrides:
+  advisory_class:
+    title: Seasonal advisory
+    classes: {0: Normal, 1: Watch, 2: Alert, 3: Emergency}
+
+# Optional advisory text per class, shown for the selected area.
+advisories:
+  advisory_class:
+    0: Conditions close to or better than usual.
+    1: Somewhat worse than usual; prepare.
+    2: Clearly worse than usual; reduce risk.
+    3: Among the worst on record; act early.
+
+links:
+  - {name: Rwanda Meteorology Agency, url: "https://www.meteorwanda.gov.rw"}
+attribution: "Forecast: ECMWF SEAS5 (C3S), bias-corrected against AgERA5 1991–2020."

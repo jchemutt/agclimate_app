@@ -1,0 +1,111 @@
+# Kenya country profile. See _template.yaml for every option.
+# Swahili text is a DRAFT for review by KMD / local extension experts.
+id: kenya                      # = pipeline domain (s3://<bucket>/published/kenya/)
+name: {en: Kenya, sw: Kenya}
+flag: "🇰🇪"
+languages: [en, sw]
+default_language: en
+
+map:
+  center: [37.9, 0.3]          # lon, lat
+  zoom: 6
+  bbox: [33.5, -5.0, 42.0, 5.5]
+
+admin_levels:                  # ids match the boundaries levels published by the pipeline
+  - {id: county, label: {en: County, sw: Kaunti}}
+  - {id: sub_county, label: {en: Sub-county, sw: Kaunti ndogo}}
+  - {id: ward, label: {en: Ward, sw: Wadi}}
+
+seasons:                       # forecast start month -> season name
+  - id: OND
+    label: {en: Short rains, sw: Mvua za vuli}
+    start_months: [9, 10, 11]
+  - id: MAM
+    label: {en: Long rains, sw: Masika}
+    start_months: [2, 3, 4]
+  - id: JJA
+    label: {en: June–August rains, sw: Mvua za Juni–Agosti}
+    start_months: [6, 7]
+default_season_label: {en: Seasonal outlook, sw: Utabiri wa msimu}
+
+layer_groups:
+  - id: advisory
+    label: {en: Advisory, sw: Ushauri}
+    layers: [advisory_class]
+  - id: rainfall
+    label: {en: Rainfall, sw: Mvua}
+    layers: [rain_tercile_most_likely, rain_prob_below_normal, rain_prob_above_normal,
+             rainfall_anomaly_percent, rainfall_total]
+  - id: season
+    label: {en: Season timing, sw: Mwanzo wa msimu}
+    layers: [onset_day, false_start_prob]
+  - id: drought
+    label: {en: Drought, sw: Ukame}
+    layers: [drought_prob_spi3, spi_3]
+  - id: heat
+    label: {en: Heat, sw: Joto}
+    layers: [heat_stress_days]
+default_layer: advisory_class
+
+layer_overrides:
+  advisory_class:
+    title: {en: Seasonal advisory, sw: Ushauri wa msimu}
+    classes:
+      0: {en: Normal, sw: Kawaida}
+      1: {en: Watch, sw: Tahadhari}
+      2: {en: Alert, sw: Onyo}
+      3: {en: Emergency, sw: Dharura}
+  rain_tercile_most_likely:
+    title: {en: Most likely rainfall, sw: Mvua inayotarajiwa zaidi}
+    classes:
+      1: {en: Below normal, sw: Chini ya kawaida}
+      2: {en: Near normal, sw: Karibu na kawaida}
+      3: {en: Above normal, sw: Juu ya kawaida}
+  rain_prob_below_normal: {title: {en: Chance of below-normal rainfall, sw: Uwezekano wa mvua chini ya kawaida}}
+  rain_prob_above_normal: {title: {en: Chance of above-normal rainfall, sw: Uwezekano wa mvua juu ya kawaida}}
+  rainfall_anomaly_percent: {title: {en: Rainfall compared with normal, sw: Mvua ikilinganishwa na kawaida}}
+  rainfall_total: {title: {en: Expected rainfall total, sw: Jumla ya mvua inayotarajiwa}}
+  onset_day: {title: {en: Rainy-season onset, sw: Mwanzo wa mvua}}
+  false_start_prob: {title: {en: Chance of a false start, sw: Uwezekano wa mwanzo wa uongo}}
+  drought_prob_spi3: {title: {en: Chance of drought, sw: Uwezekano wa ukame}}
+  spi_3: {title: {en: Drought index (SPI-3), sw: Kiashiria cha ukame (SPI-3)}}
+  heat_stress_days: {title: {en: Heat-stress days, sw: Siku za joto kali}}
+
+advisories:                    # shown with the advisory class of the selected area
+  advisory_class:
+    0:
+      en: >-
+        Conditions close to or better than usual for this season. Plan planting
+        and grazing as normal and follow the monthly updates.
+      sw: >-
+        Hali inatarajiwa kuwa ya kawaida au bora kuliko kawaida kwa msimu huu.
+        Panga upanzi na malisho kama kawaida na fuatilia taarifa za kila mwezi.
+    1:
+      en: >-
+        Somewhat worse than usual. Prepare: consider early-maturing or
+        drought-tolerant varieties and plan water and pasture use.
+      sw: >-
+        Hali inaweza kuwa mbaya kidogo kuliko kawaida. Jitayarishe: fikiria mbegu
+        zinazokomaa mapema au zinazostahimili ukame, na panga matumizi ya maji na malisho.
+    2:
+      en: >-
+        Clearly worse than usual (about one season in four). Reduce risk: stagger
+        planting, conserve water and fodder, and talk to your extension officer.
+      sw: >-
+        Hali mbaya kuliko kawaida (takriban msimu mmoja kati ya minne). Punguza hatari:
+        panda kwa awamu, hifadhi maji na lishe ya mifugo, na zungumza na afisa wa ugani.
+    3:
+      en: >-
+        Among the worst seasons on record (about one in eight). Act early: secure
+        water and feed, consider destocking and follow county drought advisories.
+      sw: >-
+        Mojawapo ya misimu mibaya zaidi kuwahi kurekodiwa (takriban mmoja kati ya minane).
+        Chukua hatua mapema: hakikisha maji na lishe, fikiria kupunguza mifugo na fuata
+        ushauri wa ukame wa kaunti.
+
+links:
+  - {name: Kenya Meteorological Department, url: "https://meteo.go.ke"}
+  - {name: "Alliance of Bioversity International and CIAT", url: "https://alliancebioversityciat.org"}
+attribution: >-
+  Forecast: ECMWF SEAS5 (Copernicus Climate Change Service), bias-corrected against
+  AgERA5 1991–2020. Indices: AgClimateAF.

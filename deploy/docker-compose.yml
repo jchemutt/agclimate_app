@@ -1,0 +1,45 @@
+# AgClimate AF web app on one EC2 instance.
+#   caddy  :80/:443  HTTPS (automatic Let's Encrypt), /api -> api, everything else -> web
+#   api    :8000     FastAPI, reads s3://$S3_BUCKET/published via the instance role
+#   web    :3000     Next.js
+# Profiles are mounted read-only: add or edit profiles/<country>.yaml and the
+# API picks it up without a restart.
+services:
+  api:
+    build: ../api
+    image: agclimateaf/app-api:${APP_TAG:-latest}
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      PROFILES_DIR: /profiles
+      CACHE_DIR: /cache
+    volumes:
+      - ../profiles:/profiles:ro
+      - api-cache:/cache
+      # local data instead of S3 (development): set DATA_DIR=/data in .env and uncomment
+      # - ${LOCAL_DATA:-./data}:/data:ro
+
+  web:
+    build: ../web
+    image: agclimateaf/app-web:${APP_TAG:-latest}
+    restart: unless-stopped
+    environment:
+      API_URL: http://api:8000
+    depends_on: [api]
+
+  caddy:
+    image: caddy:2.10.2
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    environment:
+      DOMAIN: ${DOMAIN:-localhost}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on: [api, web]
+
+volumes:
+  api-cache:
+  caddy-data:
+  caddy-config:

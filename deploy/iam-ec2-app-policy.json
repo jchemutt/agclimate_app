@@ -1,0 +1,18 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ReadPublishedOutputs",
+      "Effect": "Allow",
+      "Action": "s3:GetObject",
+      "Resource": "arn:aws:s3:::agclimateaf-953975492473-af-south-1-an/published/*"
+    },
+    {
+      "Sid": "ListPublished",
+      "Effect": "Allow",
+      "Action": "s3:ListBucket",
+      "Resource": "arn:aws:s3:::agclimateaf-953975492473-af-south-1-an",
+      "Condition": {"StringLike": {"s3:prefix": ["published/*"]}}
+    }
+  ]
+}
