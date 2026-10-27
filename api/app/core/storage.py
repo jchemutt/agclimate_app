@@ -21,7 +21,7 @@ import threading
 import time
 from pathlib import Path, PurePosixPath
 
-from .settings import Settings
+from .config import API_V1, Settings
 
 INDEX_FILES = {"latest.json", "runs.json"}
 
@@ -107,4 +107,4 @@ class Store:
         key = _clean(key)
         if self.s.public_data_url:
             return f"{self.s.public_data_url}/{key}"
-        return f"/api/files/{key}"
+        return f"{API_V1}/files/{key}"

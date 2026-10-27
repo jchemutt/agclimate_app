@@ -44,8 +44,14 @@ def _published(root: Path, cid="kenya", init="2026-10-01"):
                          {"level": "county", "count": 1, "summary": "areas/county.json"}],
                "data": {"members": "data/members.nc", "layers": "data/layers.nc"}}
     (run / "catalog.json").write_text(json.dumps(catalog))
-    (run / "areas" / "county.json").write_text(json.dumps({"level": "county", "areas": [
-        {"id": "nairobi", "name": "Nairobi", "values": {"advisory_class": {"majority": 2}}}]}))
+    (run / "areas" / "county.json").write_text(json.dumps({"level": "county", "layers": ["advisory_class", "rainfall_total"], "areas": [
+        {"id": "nairobi", "name": "Nairobi", "parent_id": None,
+         "values": {"advisory_class": {"majority": 2, "share": {"2": 1.0}}, "rainfall_total": {"mean": 321.5}}}]}))
+    (run / "areas" / "ward.json").write_text(json.dumps({"level": "ward", "layers": ["advisory_class", "rainfall_total"], "areas": [
+        {"id": "nairobi/westlands/parklands", "name": "Parklands", "parent_id": "nairobi",
+         "values": {"advisory_class": {"majority": 3, "share": {"3": 1.0}}, "rainfall_total": {"mean": 120.0}}},
+        {"id": "nairobi/westlands/kangemi", "name": "Kangemi", "parent_id": "nairobi",
+         "values": {"advisory_class": {"majority": 0, "share": {"0": 1.0}}, "rainfall_total": {"mean": None}}}]}))
     (root / cid / "boundaries" / "county.geojson").write_text(json.dumps(
         {"type": "FeatureCollection", "features": []}))
     (root / cid / "runs.json").write_text(json.dumps({"domain": cid, "runs": [
@@ -60,23 +66,23 @@ def client(tmp_path, monkeypatch):
     shutil.copytree(ROOT / "profiles", profiles)
     monkeypatch.setenv("DATA_DIR", str(data))
     monkeypatch.setenv("PROFILES_DIR", str(profiles))
-    import app.main as m
-    m._store.cache_clear()
-    m._registry.cache_clear()
-    c = TestClient(m.create_app())
+    from app.core.deps import reset_caches
+    from app.main import create_app
+    reset_caches()
+    c = TestClient(create_app())
     c.profiles_dir = profiles
     return c
 
 
 def test_template_profile_is_valid():
     import yaml
-    from app.profiles import Profile
+    from app.core.profiles import Profile
     p = Profile.model_validate(yaml.safe_load((ROOT / "profiles" / "_template.yaml").read_text()))
     assert p.season_for("2026-09-01")["id"] == "SOND"
 
 
 def test_countries_list_with_latest_run(client):
-    r = client.get("/api/countries").json()
+    r = client.get("/api/v1/countries").json()
     assert [c["id"] for c in r] == ["kenya"]
     assert r[0]["latest"]["init"] == "2026-10-01"
     assert r[0]["latest"]["season"]["id"] == "OND"
@@ -86,16 +92,16 @@ def test_adding_a_country_needs_only_a_profile(client):
     import yaml
     tpl = yaml.safe_load((ROOT / "profiles" / "_template.yaml").read_text())
     (client.profiles_dir / "rwanda.yaml").write_text(yaml.safe_dump(tpl))
-    r = {c["id"]: c for c in client.get("/api/countries").json()}
+    r = {c["id"]: c for c in client.get("/api/v1/countries").json()}
     assert set(r) == {"kenya", "rwanda"} and r["rwanda"]["latest"] is None   # no run published yet
-    assert client.get("/api/countries/rwanda/runs/latest").status_code == 404
+    assert client.get("/api/v1/countries/rwanda/runs/latest").status_code == 404
     (client.profiles_dir / "rwanda.yaml").write_text("id: Rwanda!\nname: x\n")  # invalid -> reported
-    h = client.get("/api/health").json()
+    h = client.get("/api/v1/health").json()
     assert "rwanda.yaml" in h["invalid_profiles"] and h["countries"] == ["kenya"]
 
 
 def test_run_view_merges_profile_and_catalog(client):
-    r = client.get("/api/countries/kenya/runs/latest")
+    r = client.get("/api/v1/countries/kenya/runs/latest")
     assert r.status_code == 200
     v = r.json()
     assert v["init"] == "2026-10-01" and v["season"]["label"]["sw"] == "Mvua za vuli"
@@ -105,29 +111,71 @@ def test_run_view_merges_profile_and_catalog(client):
     assert adv["title"]["sw"] == "Ushauri wa msimu"
     assert adv["legend"]["classes"][3]["label"]["sw"] == "Dharura"
     assert adv["advisories"]["2"]["en"].startswith("Clearly worse")
-    assert adv["cog_url"] == "/api/files/kenya/2026-10-01/layers/advisory_class.tif"
+    assert adv["cog_url"] == "/api/v1/files/kenya/2026-10-01/layers/advisory_class.tif"
     assert [a["level"] for a in v["areas"]] == ["county", "ward"]          # profile order
     assert v["areas"][0]["label"]["en"] == "County" and v["point_query"] is True
 
 
 def test_point_query(client):
-    p = client.get("/api/countries/kenya/runs/latest/point", params={"lat": 0.02, "lon": 36.19}).json()
+    p = client.get("/api/v1/countries/kenya/runs/latest/point", params={"lat": 0.02, "lon": 36.19}).json()
     assert (p["lat"], p["lon"]) == (0.0, 36.2)
     assert p["layers"] == {"advisory_class": 2.0, "rainfall_total": 300.0} and p["inside"]
     assert len(p["members"]["rainfall_total"]) == 4 and p["terciles"]["p33"] == 250.0
-    sea = client.get("/api/countries/kenya/runs/latest/point", params={"lat": 0.1, "lon": 36.1}).json()
+    sea = client.get("/api/v1/countries/kenya/runs/latest/point", params={"lat": 0.1, "lon": 36.1}).json()
     assert sea["inside"] is False
-    assert client.get("/api/countries/kenya/runs/latest/point", params={"lat": 3, "lon": 36}).status_code == 404
+    assert client.get("/api/v1/countries/kenya/runs/latest/point", params={"lat": 3, "lon": 36}).status_code == 404
 
 
 def test_files_and_areas(client):
-    f = client.get("/api/files/kenya/2026-10-01/layers/advisory_class.tif", headers={"Range": "bytes=0-3"})
+    f = client.get("/api/v1/files/kenya/2026-10-01/layers/advisory_class.tif", headers={"Range": "bytes=0-3"})
     assert f.status_code == 206 and f.content == b"II*\x00"
-    assert client.get("/api/files/kenya/2026-10-01/data/layers.nc").status_code == 404     # not a layer file
-    assert client.get("/api/files/kenya/../secret.tif").status_code == 404
-    assert client.get("/api/files/other/2026-10-01/layers/x.tif").status_code == 404
-    a = client.get("/api/countries/kenya/runs/2026-10-01/areas/county")
+    assert client.get("/api/v1/files/kenya/2026-10-01/data/layers.nc").status_code == 404     # not a layer file
+    assert client.get("/api/v1/files/kenya/../secret.tif").status_code == 404
+    assert client.get("/api/v1/files/other/2026-10-01/layers/x.tif").status_code == 404
+    a = client.get("/api/v1/countries/kenya/runs/2026-10-01/areas/county")
     assert a.json()["areas"][0]["name"] == "Nairobi" and "immutable" in a.headers["cache-control"]
-    assert client.get("/api/countries/kenya/boundaries/county").status_code == 200
-    assert client.get("/api/countries/kenya/runs/2026-13-xx").status_code == 400
-    assert client.get("/api/countries/atlantis/runs/latest").status_code == 404
+    assert client.get("/api/v1/countries/kenya/boundaries/county").status_code == 200
+    assert client.get("/api/v1/countries/kenya/runs/2026-13-xx").status_code == 400
+    assert client.get("/api/v1/countries/atlantis/runs/latest").status_code == 404
+
+
+def test_area_outlook_for_integrations(client):
+    o = client.get("/api/v1/countries/kenya/runs/latest/areas/ward/nairobi/westlands/parklands",
+                   params={"lang": "sw"}).json()
+    assert o["name"] == "Parklands" and o["parents"] == ["Nairobi"] and o["level_label"] == "Wadi"
+    assert o["advisory"]["value"] == 3 and o["advisory"]["label"] == "Dharura"
+    assert o["advisory"]["message"].startswith("Mojawapo ya misimu mibaya")
+    rain = next(i for i in o["items"] if i["id"] == "rainfall_total")
+    assert rain["value"] == 120.0 and rain["title"] == "Jumla ya mvua inayotarajiwa"
+    en = client.get("/api/v1/countries/kenya/runs/latest/areas/county/nairobi", params={"lang": "xx"}).json()
+    assert en["language"] == "en" and en["advisory"]["label"] == "Alert"          # unknown lang -> default
+    assert client.get("/api/v1/countries/kenya/runs/latest/areas/ward/nowhere").status_code == 404
+
+
+def test_area_search_and_csv(client):
+    r = client.get("/api/v1/countries/kenya/runs/latest/areas/ward", params={"q": "PARK"}).json()
+    assert [a["name"] for a in r["areas"]] == ["Parklands"]
+    r = client.get("/api/v1/countries/kenya/runs/latest/areas/ward", params={"parent": "nairobi"}).json()
+    assert len(r["areas"]) == 2
+    c = client.get("/api/v1/countries/kenya/runs/2026-10-01/areas/ward", params={"format": "csv", "lang": "en"})
+    assert c.headers["content-type"].startswith("text/csv") and "attachment" in c.headers["content-disposition"]
+    rows = c.text.strip().splitlines()
+    assert rows[0].startswith("id,name,parent_id,Seasonal advisory")
+    assert rows[1].endswith("Emergency,120.0") and rows[2].endswith("Normal,")
+
+
+def test_point_outlook_text(client):
+    p = client.get("/api/v1/countries/kenya/runs/latest/point", params={"lat": 0.0, "lon": 36.2, "lang": "en"}).json()
+    assert p["advisory"]["label"] == "Alert" and p["advisory"]["message"].startswith("Clearly worse")
+    assert [i["id"] for i in p["items"]][0] == "advisory_class"
+
+
+def test_openapi_documents_every_route(client):
+    spec = client.get("/api/openapi.json").json()
+    ops = [(path, m, op) for path, item in spec["paths"].items() for m, op in item.items()]
+    assert all(path.startswith("/api/v1/") for path, _, _ in ops)
+    ids = [op["operationId"] for _, _, op in ops]
+    assert len(ids) == len(set(ids)) and "area_outlook" in ids and "point" in ids
+    assert all(op.get("summary") and op.get("tags") for _, _, op in ops)
+    assert "AreaOutlook" in spec["components"]["schemas"]
+    assert client.get("/api/docs").status_code == 200

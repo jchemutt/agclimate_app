@@ -13,6 +13,7 @@ services:
     environment:
       PROFILES_DIR: /profiles
       CACHE_DIR: /cache
+      API_WORKERS: ${API_WORKERS:-2}
     volumes:
       - ../profiles:/profiles:ro
       - api-cache:/cache

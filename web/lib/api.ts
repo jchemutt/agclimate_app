@@ -18,13 +18,15 @@ async function get<T>(url: string, { memo = true } = {}): Promise<T> {
   return p;
 }
 
+const V1 = "/api/v1";
+
 export const api = {
-  countries: () => get<CountrySummary[]>("/api/countries"),
-  profile: (c: string) => get<Profile>(`/api/countries/${c}/profile`),
-  runs: (c: string) => get<RunListItem[]>(`/api/countries/${c}/runs`),
-  run: (c: string, init = "latest") => get<RunView>(`/api/countries/${c}/runs/${init}`),
+  countries: () => get<CountrySummary[]>(`${V1}/countries`),
+  profile: (c: string) => get<Profile>(`${V1}/countries/${c}`),
+  runs: (c: string) => get<RunListItem[]>(`${V1}/countries/${c}/runs`),
+  run: (c: string, init = "latest") => get<RunView>(`${V1}/countries/${c}/runs/${init}`),
   areas: (url: string) => get<AreaSummary>(url),
   boundaries: (url: string) => get<object>(url),
   point: (c: string, init: string, lat: number, lon: number) =>
-    get<PointResult>(`/api/countries/${c}/runs/${init}/point?lat=${lat.toFixed(4)}&lon=${lon.toFixed(4)}`),
+    get<PointResult>(`${V1}/countries/${c}/runs/${init}/point?lat=${lat.toFixed(4)}&lon=${lon.toFixed(4)}`),
 };

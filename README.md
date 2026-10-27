@@ -38,21 +38,40 @@ To add a country (for example Rwanda):
 
 Until its first run is published, the country shows as "No forecast published yet". An invalid profile never breaks the other countries; it's listed under `invalid_profiles` in `/api/health`.
 
-## API
+## API (for this app and for other systems)
 
-| Endpoint | Purpose |
+Everything is under `/api/v1`, documented in Swagger at **`/api/docs`** (ReDoc at
+`/api/redoc`, OpenAPI 3.1 JSON at `/api/openapi.json`). Each endpoint has a stable
+`operationId`, so clients can be generated with OpenAPI Generator or `openapi-typescript`.
+Use `latest` for the newest run, or a date such as `2026-10-01`. Dated runs never
+change, so they are served with immutable cache headers.
+
+| Endpoint | Use |
 |---|---|
-| `GET /api/health` | status, loaded countries, invalid profiles |
-| `GET /api/countries` | country list with the latest run |
-| `GET /api/countries/{id}/profile` | the profile |
-| `GET /api/countries/{id}/runs` | published runs, newest first, with season names |
-| `GET /api/countries/{id}/runs/{init\|latest}` | everything the map needs for one run (layers, legends, groups, admin levels) |
-| `GET /api/countries/{id}/runs/{init}/areas/{level}` | per-area summaries |
-| `GET /api/countries/{id}/boundaries/{level}` | GeoJSON boundaries |
-| `GET /api/countries/{id}/runs/{init}/point?lat=&lon=` | map values and every member at one grid cell (runs published by prep v8+) |
-| `GET /api/files/{id}/{init}/layers/...` | layer files when no CloudFront is configured (supports Range requests) |
+| `GET /countries` | countries and their latest run |
+| `GET /countries/{cid}` | the country profile |
+| `GET /countries/{cid}/runs` | published runs, newest first |
+| `GET /countries/{cid}/runs/{init}` | one run: layers, legends, COG links, admin levels |
+| `GET /countries/{cid}/runs/{init}/areas/{level}` | every area's values; `?q=` name search, `?parent=` filter, `?format=csv` spreadsheet |
+| `GET /countries/{cid}/runs/{init}/areas/{level}/{area_id}?lang=sw` | **one area's outlook as text**: advisory class and message, every layer with title, class name or date (for chatbots, SMS, other platforms) |
+| `GET /countries/{cid}/runs/{init}/point?lat=&lon=&lang=` | the same for a location, plus each ensemble member's value and the tercile thresholds |
+| `GET /countries/{cid}/boundaries/{level}` | GeoJSON boundaries (`id` matches the area ids) |
+| `GET /files/{cid}/{init}/layers/{id}.tif` | layer COGs (HTTP Range supported: QGIS/GDAL can read them directly) |
+| `GET /health` | status, loaded countries, invalid profiles |
 
-Interactive docs are at `/api/docs`. Published runs never change, so their responses are cached as immutable; `latest` and the run list refresh every `INDEX_TTL` seconds (default 300).
+Code layout (`api/app/`):
+
+```
+core/       config, storage (local folder or S3, disk cache), country profiles, shared dependencies
+services/   joining profiles with published runs, text outlooks and CSV, point reads
+schemas/    response models: the public contract shown in Swagger
+routers/    one module per resource (countries, runs, areas, points, files, system)
+main.py     application factory: metadata, middleware, routers
+```
+
+To add an endpoint, add a model in `schemas/`, the logic in `services/`, and a route in
+`routers/` (or a new router registered in `main.py`). A future breaking change goes in
+a new `routers/v2` with prefix `/api/v2`, while `/api/v1` keeps working.
 
 ## Local development
 
@@ -80,6 +99,32 @@ docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build
 
 Open http://localhost. To stop it: `docker compose down`.
 
+## Server size and scaling
+
+The app is light. Everything it serves is precomputed files from S3, cached on the
+instance's disk. There's no database and no on-the-fly raster processing.
+
+| Stage | Instance | Notes |
+|---|---|---|
+| Pilot, 1–3 countries | **t3.medium** (2 vCPU, 4 GB), 30 GB gp3 | Recommended start. A t3.small (2 GB) runs it but is tight while building images. **t4g.medium** (Graviton) is cheaper for the same capacity; see below. |
+| National rollout, 5–15 countries, heavier integration use | t3.large (8 GB), `API_WORKERS=2` + **CloudFront** in front | |
+| Continental, or sustained high traffic | Same containers on **ECS Fargate behind a load balancer** (2+ API tasks, auto-scaling) | The API keeps no state between requests, so no code change. |
+
+Rough memory use: each API worker ~200–300 MB, Next.js ~150 MB, Caddy ~30 MB. Peak is
+during `docker compose build`, which is why the setup script adds 2 GB of swap. Disk: the
+cache grows by one run per country per month (Kenya ≈ 12 MB per run; an Africa-wide
+0.1° run would be around 1 GB, mostly the members file).
+
+**The biggest scaling step is CloudFront, not a bigger instance.** Put a CloudFront
+distribution in front of the whole site (origin: the instance). Dated runs, layer files
+and boundaries are cacheable, so most requests are then served from the CDN edge and
+the instance mostly answers `latest` and point queries. A CDN also helps users on slow
+mobile connections, because the boundaries and layers come from the edge closest to them.
+
+**Graviton (t4g):** the Python, Node and Caddy images are multi-architecture, and the
+setup script detects the CPU type. Use `--instance-type t4g.medium` and the arm64 image:
+`/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-arm64`.
+
 ## Deploying on EC2 (af-south-1)
 
 Run these once, from Git Bash in `deploy/`, with your admin AWS credentials:
@@ -105,11 +150,11 @@ aws ec2 authorize-security-group-ingress --group-id "$SG" --ip-permissions \
   'IpProtocol=tcp,FromPort=80,ToPort=80,IpRanges=[{CidrIp=0.0.0.0/0}]' \
   'IpProtocol=tcp,FromPort=443,ToPort=443,IpRanges=[{CidrIp=0.0.0.0/0}]'
 
-# 3. The instance (Amazon Linux 2023, t3.small, 30 GB). Hop limit 2 lets the API
+# 3. The instance (Amazon Linux 2023, t3.medium, 30 GB). Hop limit 2 lets the API
 #    container reach the instance role's credentials.
 AMI=$(aws ssm get-parameter --name /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64 \
   --query Parameter.Value --output text)
-ID=$(aws ec2 run-instances --image-id "$AMI" --instance-type t3.small \
+ID=$(aws ec2 run-instances --image-id "$AMI" --instance-type t3.medium \
   --iam-instance-profile Name=AgClimateAF-App-EC2 --security-group-ids "$SG" \
   --block-device-mappings 'DeviceName=/dev/xvda,Ebs={VolumeSize=30,VolumeType=gp3}' \
   --metadata-options HttpTokens=required,HttpPutResponseHopLimit=2 \

@@ -3,7 +3,11 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
+from functools import lru_cache
 from pathlib import Path
+
+
+API_V1 = "/api/v1"
 
 
 def _env(name: str, default: str = "") -> str:
@@ -30,5 +34,6 @@ class Settings:
         default_factory=lambda: tuple(o for o in _env("CORS_ORIGINS").split(",") if o))
 
 
+@lru_cache
 def get_settings() -> Settings:
     return Settings()

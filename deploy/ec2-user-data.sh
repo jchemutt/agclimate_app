@@ -5,12 +5,17 @@ dnf install -y docker git
 systemctl enable --now docker
 usermod -aG docker ec2-user
 mkdir -p /usr/local/lib/docker/cli-plugins
-curl -fsSL https://github.com/docker/compose/releases/latest/download/docker-compose-linux-x86_64 \
+# works on Intel/AMD (t3, m7i) and Graviton (t4g, m7g) instances
+case "$(uname -m)" in
+  aarch64) COMPOSE_ARCH=aarch64; BUILDX_ARCH=arm64 ;;
+  *)       COMPOSE_ARCH=x86_64;  BUILDX_ARCH=amd64 ;;
+esac
+curl -fsSL "https://github.com/docker/compose/releases/latest/download/docker-compose-linux-${COMPOSE_ARCH}" \
   -o /usr/local/lib/docker/cli-plugins/docker-compose
 BUILDX=$(curl -fsSL https://api.github.com/repos/docker/buildx/releases/latest | grep -m1 '"tag_name"' | cut -d'"' -f4)
-curl -fsSL "https://github.com/docker/buildx/releases/download/${BUILDX}/buildx-${BUILDX}.linux-amd64" \
+curl -fsSL "https://github.com/docker/buildx/releases/download/${BUILDX}/buildx-${BUILDX}.linux-${BUILDX_ARCH}" \
   -o /usr/local/lib/docker/cli-plugins/docker-buildx
 chmod +x /usr/local/lib/docker/cli-plugins/*
-# 2 GB swap: building the Next.js image needs more than a t3.small's 2 GB RAM
+# 2 GB swap: headroom while building the images
 fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile
 echo '/swapfile none swap sw 0 0' >> /etc/fstab
