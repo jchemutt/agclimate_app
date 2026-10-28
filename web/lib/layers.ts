@@ -47,13 +47,14 @@ export function groupOf(run: RunView, base: string | null) {
   return run.groups.find((g) => g.layers.includes(base ?? "")) ?? null;
 }
 
-/** Short label for the period selector: "Short rains", "Nov", "Jan 27", "Whole forecast". */
+/** Short label for the period selector: "OND", "Nov", "Jan 27", "Whole forecast" (long: "Short rains (OND)"). */
 export function periodLabel(p: Period, lang: string, init: string, long = false): string {
   if (p.kind === "month" && p.start) {
     const otherYear = p.start.slice(0, 4) !== init.slice(0, 4);
     return fmtDate(p.start, lang, long || otherYear ? { month: long ? "long" : "short", year: long ? "numeric" : "2-digit" }
                                                      : { month: "short" });
   }
+  if (p.kind === "season") return long ? `${tx(p.label, lang) || p.id} (${p.id})` : p.id;   // "OND"
   return tx(p.label, lang) || p.id;
 }
 

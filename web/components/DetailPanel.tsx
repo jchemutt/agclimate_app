@@ -1,8 +1,9 @@
-import type { AreaRecord, AreaSummary, LayerInfo, PointResult, RunView, Selection } from "@/lib/types";
+import type { AreaRecord, AreaSummary, LayerInfo, Legend, Period, PointResult, RunView, Selection } from "@/lib/types";
 import { t, tx } from "@/lib/i18n";
 import { areaNumber, fmtValue } from "@/lib/format";
 import { colorFor, css } from "@/lib/color";
 import MemberChart from "./MemberChart";
+import MonthChart from "./MonthChart";
 import { GroupIcon } from "./icons";
 
 interface Props {
@@ -17,11 +18,17 @@ interface Props {
   current?: string | null;                 // base on the map: its group opens, its row is marked
   period?: string | null;                  // values shown are this period's
   onLayer?: (base: string) => void;        // click a value to show that layer
+  monthly?: {                              // the active indicator, month by month
+    title: string; months: Period[]; legends: (Legend | null)[];
+    values: (number | null)[] | null; highlight: Set<string>;
+  } | null;
+  onPeriod?: (id: string) => void;
 }
 
 const ADVISORY = "advisory_class";
 
-export default function DetailPanel({ run, selection, area, parents, levelLabel, point, lang, onClose, current, period, onLayer }: Props) {
+export default function DetailPanel({ run, selection, area, parents, levelLabel, point, lang, onClose, current, period, onLayer,
+                                     monthly, onPeriod }: Props) {
   const isArea = selection.kind === "area" && area;
   const pt = typeof point === "object" ? point : null;
   const value = (id: string): number | null =>
@@ -59,6 +66,15 @@ export default function DetailPanel({ run, selection, area, parents, levelLabel,
             <ShareBar share={(area!.values[advId] as { share: Record<string, number> }).share} layer={adv!} lang={lang} />
           ) : null}
         </section>
+      ) : null}
+
+      {!outside && (isArea || pt) ? (
+        monthly ? (
+          monthly.values ? (
+            <MonthChart title={monthly.title} months={monthly.months} values={monthly.values} legends={monthly.legends}
+                        highlight={monthly.highlight} init={run.init} lang={lang} onPick={onPeriod} />
+          ) : <p className="muted small">{t(lang, "loading")}</p>
+        ) : current ? <p className="muted small mc-none">{t(lang, "noMonthly")}</p> : null
       ) : null}
 
       {!outside && (isArea || pt) ? (

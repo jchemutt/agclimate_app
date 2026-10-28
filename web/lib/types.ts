@@ -30,7 +30,7 @@ export interface Profile {
   theme?: CountryTheme | null;
   languages: string[];
   default_language: string;
-  map: { center: [number, number] | null; zoom: number; bbox: number[] | null; basemap: string | null };
+  map: { center: [number, number] | null; zoom: number; bbox: number[] | null; basemap: string | null; default_basemap?: string | null };
   links: { name: Text; url: string }[];
   attribution: Text | null;
 }
@@ -143,3 +143,11 @@ export interface PointResult {
 export type Selection =
   | { kind: "point"; lat: number; lon: number }
   | { kind: "area"; level: string; id: string; lat: number; lon: number };
+
+export interface AreaSeries {
+  level: string;
+  id: string;
+  name: string | null;
+  months: { id: string; start?: string; end?: string }[];
+  series: Record<string, (number | null)[]>;      // base -> one value per month
+}

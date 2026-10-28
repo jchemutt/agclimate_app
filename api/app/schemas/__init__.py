@@ -192,6 +192,23 @@ class AreaOutlook(BaseModel):
     items: list[OutlookItem]
 
 
+class SeriesMonth(BaseModel):
+    id: str = Field(examples=["2026-11"])
+    start: Optional[str] = None
+    end: Optional[str] = None
+
+
+class AreaSeries(BaseModel):
+    country: str
+    init: str
+    level: str
+    id: str
+    name: Optional[str] = None
+    months: list[SeriesMonth]
+    series: dict[str, list[Optional[float]]] = Field(description="Indicator (base) -> one value per month "
+                                                                  "(area mean, or majority class)")
+
+
 class Terciles(BaseModel):
     p33: Optional[float] = Field(None, description="Lower tercile of 1991-2020 rainfall for the same weeks (mm)")
     p66: Optional[float] = Field(None, description="Upper tercile (mm)")

@@ -6,7 +6,7 @@ import Link from "next/link";
 import type OlMap from "ol/Map";
 import { Download, Home, Layers, MapPinned, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { api } from "@/lib/api";
-import type { AreaSummary, PointResult, Profile, RunListItem, RunView, Selection } from "@/lib/types";
+import type { AreaSeries, AreaSummary, PointResult, Profile, RunListItem, RunView, Selection } from "@/lib/types";
 import { LANGUAGE_NAMES, t, tx } from "@/lib/i18n";
 import { fmtDate } from "@/lib/format";
 import { themeVars } from "@/lib/theme";
@@ -42,11 +42,12 @@ export default function Dashboard({ country, query: q }: { country: string; quer
   const [summaries, setSummaries] = useState<Record<string, AreaSummary>>({});
   const [selection, setSelection] = useState<Selection | null>(null);
   const [point, setPoint] = useState<PointResult | null | "loading" | "error">(null);
+  const [series, setSeries] = useState<AreaSeries | null>(null);
   const [tab, setTab] = useState<Tab>("outlook");
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [areasLevel, setAreasLevel] = useState<string | null>(null);
-  const [basemapId, setBasemapId] = useState<BasemapId>("light");
+  const [basemapId, setBasemapId] = useState<BasemapId>("satellite");
   const [opacity, setOpacity] = useState(0.85);
   const [mapObj, setMapObj] = useState<OlMap | null>(null);
   const [focus, setFocus] = useState<Focus | null>(null);
@@ -57,6 +58,7 @@ export default function Dashboard({ country, query: q }: { country: string; quer
       setProfile(p);
       setLang((l) => (l && p.languages.includes(l) ? l : storedLang(country, p)));
       if (p.map.basemap) setBasemapId("custom");
+      else if (p.map.default_basemap) setBasemapId(p.map.default_basemap as BasemapId);
     }).catch((e) => setError(e.status === 404 ? "missing" : "failed"));
     api.runs(country).then(setRuns).catch(() => setRuns([]));
   }, [country]);
@@ -111,6 +113,16 @@ export default function Dashboard({ country, query: q }: { country: string; quer
     return () => {
       live = false;
     };
+  }, [country, run, selection]);
+
+  // month-by-month values of the selected area (every indicator at once; points use point.layers)
+  useEffect(() => {
+    setSeries(null);
+    if (!run || selection?.kind !== "area") return;
+    let live = true;
+    api.series(country, run.init, selection.level, selection.id)
+      .then((s) => live && setSeries(s)).catch(() => undefined);
+    return () => { live = false; };
   }, [country, run, selection]);
 
   // keep the URL shareable
@@ -194,6 +206,19 @@ export default function Dashboard({ country, query: q }: { country: string; quer
     choose(first ?? g.layers[0]);
   };
 
+  // the active indicator, month by month, for the selected place
+  const months = run ? run.periods.filter((p) => p.kind === "month") : [];
+  const monthLids = run && base ? months.map((m) => layerIdFor(run, base, m.id)) : [];
+  const monthly = run && base && monthLids.some(Boolean) ? {
+    title: tx(layer?.title ?? run.layers[monthLids.find(Boolean)!]?.title, L),
+    months,
+    legends: monthLids.map((id) => (id ? run.layers[id]?.legend ?? null : null)),
+    values: selection?.kind === "area"
+      ? (series?.id === selection.id ? series.series[base] ?? months.map(() => null) : null)
+      : monthLids.map((id) => (id && typeof point === "object" && point ? point.layers[id] ?? null : null)),
+    highlight: new Set(run.periods.find((p) => p.id === period && p.kind !== "window")?.months ?? []),
+  } : null;
+
   if (error === "missing") return <Message lang={L} text={t(L, "countryMissing")} />;
   if (error === "failed") return <Message lang={L} text={t(L, "loadFailed")} />;
 
@@ -270,18 +295,16 @@ export default function Dashboard({ country, query: q }: { country: string; quer
               </>
             ) : run ? (
               <>
-                <p className="season-sub">{t(L, "seasonalOutlook")}</p>
-                <h1>{tx(run.season.label, L)} {run.init.slice(0, 4)}</h1>
-                <p>{fmtDate(run.valid_from, L)} – {fmtDate(run.valid_to, L)}</p>
+                <p className="season-sub">{t(L, "forecastPeriod")}</p>
+                <h1>{fmtDate(run.valid_from, L, { month: "short", year: "numeric" })} – {fmtDate(run.valid_to, L, { month: "short", year: "numeric" })}</h1>
                 <p className="season-meta">{t(L, "issued")} {fmtDate((run.created ?? run.init).slice(0, 10), L)}, {run.members} {t(L, "members")}</p>
-                {run.preview ? <p className="preview-note">{t(L, "previewNote")}</p> : null}
                 {runs.length > 1 ? (
                   <label className="run-pick">
                     <span>{t(L, "forecastRun")}</span>
                     <select value={init === "latest" ? run.init : init} onChange={(e) => { setSelection(null); setInit(e.target.value); }}>
                       {runs.map((r) => (
                         <option key={r.init} value={r.init}>
-                          {tx(r.season.label, L)} {r.init.slice(0, 4)} ({fmtDate(r.init, L, { month: "short", year: "numeric" })})
+                          {fmtDate(r.init, L, { month: "long", year: "numeric" })}
                         </option>
                       ))}
                     </select>
@@ -372,7 +395,7 @@ export default function Dashboard({ country, query: q }: { country: string; quer
         {run && selection ? (
           <DetailPanel run={run} selection={selection} area={selArea} parents={parents} levelLabel={selLevelLabel}
                        point={point} lang={L} onClose={() => setSelection(null)} current={base} period={period}
-                       onLayer={choose} />
+                       onLayer={choose} monthly={monthly} onPeriod={setPeriod} />
         ) : run ? <p className="hint">{t(L, "clickHint")}</p> : null}
       </main>
     </div>

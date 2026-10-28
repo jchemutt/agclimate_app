@@ -6,7 +6,7 @@ from fastapi.responses import FileResponse, PlainTextResponse
 from ..core.deps import INIT_PARAM, cache, get_profile, get_store, load_catalog, resolve_init
 from ..core.profiles import Profile, text
 from ..core.storage import NotFound, Store
-from ..schemas import AreaOutlook, AreaSummary
+from ..schemas import AreaOutlook, AreaSeries, AreaSummary
 from ..services.outlook import area_number, areas_csv, items_for, parents_of, pick_language
 from ..services.runs import run_view, summary_key
 
@@ -68,6 +68,33 @@ def area_summaries(response: Response, init: str = INIT_PARAM, level: str = LEVE
             "Cache-Control": "public, max-age=60" if init == "latest" else "public, max-age=86400"})
     cache(response, init)
     return data
+
+
+@router.get("/countries/{cid}/runs/{init}/series/{level}/{area_id:path}", response_model=AreaSeries,
+            summary="Month-by-month values for one area")
+def area_series(response: Response, init: str = INIT_PARAM, level: str = LEVEL,
+                area_id: str = Path(..., description="Area id, e.g. `baringo`", examples=["baringo"]),
+                p: Profile = Depends(get_profile), st: Store = Depends(get_store)):
+    """Each indicator's area value for every forecast month, in month order (for
+    charts). Indicators without monthly layers are left out."""
+    real = resolve_init(p, init, st)
+    view = run_view(p, real, load_catalog(p, real, st), st)
+    months = [x for x in view["periods"] if x["kind"] == "month"]
+    series: dict[str, list] = {}
+    name = None
+    for k, per in enumerate(months):
+        rec = next((a for a in _summary(p, real, level, st, per["id"])["areas"] if a["id"] == area_id), None)
+        if rec is None:
+            raise HTTPException(404, f"No {level} {area_id!r} in {p.id}")
+        name = rec["name"]
+        for b, by_period in view["index"].items():
+            lid = by_period.get(per["id"])
+            if lid:
+                series.setdefault(b, [None] * len(months))[k] = area_number(rec["values"].get(lid))
+    cache(response, init)
+    return {"country": p.id, "init": real, "level": level, "id": area_id, "name": name,
+            "months": [{"id": m["id"], "start": m.get("start"), "end": m.get("end")} for m in months],
+            "series": series}
 
 
 @router.get("/countries/{cid}/runs/{init}/areas/{level}/{area_id:path}", response_model=AreaOutlook,

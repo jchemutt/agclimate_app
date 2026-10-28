@@ -28,6 +28,12 @@ import { areaNumber, fmtValue } from "@/lib/format";
 import { api } from "@/lib/api";
 
 const INK = "#1f2a2e";
+/** Boundary line colours: dark on light basemaps, light on imagery. */
+function lines(dark: boolean) {
+  return dark
+    ? { sel: "#ffffff", hover: "rgba(255,255,255,0.95)", base: "rgba(255,255,255,0.45)", outline: "rgba(255,255,255,0.7)" }
+    : { sel: INK, hover: "rgba(31,42,46,0.9)", base: "rgba(31,42,46,0.4)", outline: "rgba(31,42,46,0.55)" };
+}
 
 export interface Focus { level: string; id: string; nonce: number }
 
@@ -202,17 +208,18 @@ export default function MapView(p: Props) {
       const lg = s.layer?.legend ?? null;
       const c = rec && lg ? colorFor(areaNumber(rec.values[s.layer!.id]), lg) : null;
       const isSel = sel === f.get("id");
+      const ln = lines(s.basemap.id === "satellite");
       const isHover = hoverId.current === f.get("id");
       return new Style({
         fill: new Fill({ color: c ? css(c, 0.9 * s.opacity) : "rgba(255,255,255,0.3)" }),
         stroke: new Stroke({
-          color: isSel ? INK : isHover ? "rgba(31,42,46,0.9)" : "rgba(31,42,46,0.4)",
+          color: isSel ? ln.sel : isHover ? ln.hover : ln.base,
           width: isSel ? 3 : isHover ? 1.8 : 0.6,
         }),
         zIndex: isSel ? 10 : isHover ? 5 : 0,
       });
     });
-  }, [p.summary, p.layer, p.selection, p.levelUrl]);
+  }, [p.summary, p.layer, p.selection, p.levelUrl, p.basemap]);
 
   // -------------------------------------------------------------- outlines in grid view
   useEffect(() => {
@@ -220,7 +227,7 @@ export default function MapView(p: Props) {
     const src = lyr?.getSource();
     if (!lyr || !src) return;
     src.clear();
-    lyr.setStyle(new Style({ stroke: new Stroke({ color: "rgba(31,42,46,0.55)", width: 0.8 }) }));
+    lyr.setStyle(new Style({ stroke: new Stroke({ color: lines(p.basemap.id === "satellite").outline, width: 0.8 }) }));
     if (!p.outlineUrl || p.levelKey) return;
     let live = true;
     api.boundaries(p.outlineUrl).then((gj) => {
@@ -229,7 +236,7 @@ export default function MapView(p: Props) {
     return () => {
       live = false;
     };
-  }, [p.outlineUrl, p.levelKey]);
+  }, [p.outlineUrl, p.levelKey, p.basemap]);
 
   // -------------------------------------------------------------- zoom to an area picked in the sidebar
   const pendingFocus = useRef<Focus | null>(null);

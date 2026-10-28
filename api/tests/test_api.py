@@ -245,3 +245,13 @@ def test_area_summaries_and_outlook_per_period(tmp_path, monkeypatch):
     assert "_OND_county.csv" in csv.headers["content-disposition"]
     pt = c.get("/api/v1/countries/kenya/runs/latest/point?lat=0.5&lon=37.5&period=2026-12").json()
     assert pt["period"] == "2026-12" and all(i["period"] == "2026-12" for i in pt["items"])
+
+
+def test_area_series(tmp_path, monkeypatch):
+    c = _period_client(tmp_path, monkeypatch, "full")
+    aid = c.get("/api/v1/countries/kenya/runs/latest/areas/county?period=2026-11").json()["areas"][0]["id"]
+    r = c.get(f"/api/v1/countries/kenya/runs/latest/series/county/{aid}").json()
+    assert [m["id"] for m in r["months"]] == ["2026-10", "2026-11", "2026-12", "2027-01", "2027-02", "2027-03", "2027-04"]
+    assert len(r["series"]["rainfall_total"]) == 7 and all(v is not None for v in r["series"]["rainfall_total"])
+    assert "onset_day" not in r["series"]                       # whole-forecast only
+    assert c.get("/api/v1/countries/kenya/runs/latest/series/county/nowhere").status_code == 404

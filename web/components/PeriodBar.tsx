@@ -39,7 +39,6 @@ export default function PeriodBar({ run, value, onChange, lang }: {
                           title={`${periodLabel(p, lang, run.init, true)}${range ? ` · ${range}` : ""}`}
                           onClick={() => onChange(p.id)}>
                     {periodLabel(p, lang, run.init)}
-                    {p.kind === "season" && p.id !== periodLabel(p, lang, run.init) ? <small>{p.id}</small> : null}
                   </button>
                 );
               })}

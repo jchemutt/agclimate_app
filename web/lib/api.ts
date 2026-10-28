@@ -1,4 +1,4 @@
-import type { AreaSummary, CountrySummary, PointResult, Profile, RunListItem, RunView } from "./types";
+import type { AreaSeries, AreaSummary, CountrySummary, PointResult, Profile, RunListItem, RunView } from "./types";
 
 const cache = new Map<string, Promise<unknown>>();
 
@@ -27,6 +27,8 @@ export const api = {
   run: (c: string, init = "latest") => get<RunView>(`${V1}/countries/${c}/runs/${init}`),
   areas: (url: string) => get<AreaSummary>(url),
   boundaries: (url: string) => get<object>(url),
+  series: (c: string, init: string, level: string, id: string) =>
+    get<AreaSeries>(`${V1}/countries/${c}/runs/${init}/series/${level}/${id.split("/").map(encodeURIComponent).join("/")}`),
   point: (c: string, init: string, lat: number, lon: number) =>
     get<PointResult>(`${V1}/countries/${c}/runs/${init}/point?lat=${lat.toFixed(4)}&lon=${lon.toFixed(4)}`),
 };

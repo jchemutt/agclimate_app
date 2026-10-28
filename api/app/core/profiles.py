@@ -34,6 +34,7 @@ class MapConfig(_M):
     zoom: float = 6
     bbox: tuple[float, float, float, float] | None = None   # lon0, lat0, lon1, lat1
     basemap: str | None = None                          # XYZ url template; default from the app
+    default_basemap: str | None = None                  # satellite | light | streets | terrain (app default: satellite)
 
 
 class AdminLevel(_M):

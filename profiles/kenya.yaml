@@ -15,6 +15,7 @@ map:
   center: [37.9, 0.3]          # lon, lat
   zoom: 6
   bbox: [33.5, -5.0, 42.0, 5.5]
+  default_basemap: satellite   # satellite | light | streets | terrain
 
 admin_levels:                  # ids match the boundaries levels published by the pipeline
   - {id: county, label: {en: County, sw: Kaunti}}
