@@ -11,8 +11,9 @@ from .profiles import Profile, ProfileRegistry
 from .storage import NotFound, Store
 
 INIT_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
-IMMUTABLE = "public, max-age=86400, immutable"     # a published run never changes
+IMMUTABLE = "public, max-age=31536000, immutable" # versioned URL: content never changes
 SHORT = "public, max-age=60"
+DATED = "public, max-age=300"                          # a dated run can be republished (preview -> full)
 
 
 @lru_cache
@@ -59,12 +60,16 @@ def load_catalog(p: Profile, init: str, st: Store) -> dict:
         raise HTTPException(404, f"No run {init} for {p.id}")
 
 
-def cache(response: Response, requested_init: str | None = None, seconds: int | None = None) -> None:
-    """Immutable for a dated run, short for 'latest' and indexes."""
+def cache(response: Response, requested_init: str | None = None, seconds: int | None = None,
+          versioned: bool = False) -> None:
+    """Immutable only for versioned URLs (`?v=<created>`, which change when a run is
+    republished); short for 'latest', indexes and unversioned dated requests."""
     if seconds is not None:
         response.headers["Cache-Control"] = f"public, max-age={seconds}"
-    elif requested_init and requested_init != "latest":
+    elif versioned and requested_init and requested_init != "latest":
         response.headers["Cache-Control"] = IMMUTABLE
+    elif requested_init and requested_init != "latest":
+        response.headers["Cache-Control"] = DATED
     else:
         response.headers["Cache-Control"] = SHORT
 

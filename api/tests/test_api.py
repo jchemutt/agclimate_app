@@ -133,7 +133,7 @@ def test_files_and_areas(client):
     assert client.get("/api/v1/files/kenya/../secret.tif").status_code == 404
     assert client.get("/api/v1/files/other/2026-10-01/layers/x.tif").status_code == 404
     a = client.get("/api/v1/countries/kenya/runs/2026-10-01/areas/county")
-    assert a.json()["areas"][0]["name"] == "Nairobi" and "immutable" in a.headers["cache-control"]
+    assert a.json()["areas"][0]["name"] == "Nairobi" and a.headers["cache-control"] == "public, max-age=300"   # dated but unversioned: may be republished
     assert client.get("/api/v1/countries/kenya/boundaries/county").status_code == 200
     assert client.get("/api/v1/countries/kenya/runs/2026-13-xx").status_code == 400
     assert client.get("/api/v1/countries/atlantis/runs/latest").status_code == 404
@@ -255,3 +255,41 @@ def test_area_series(tmp_path, monkeypatch):
     assert len(r["series"]["rainfall_total"]) == 7 and all(v is not None for v in r["series"]["rainfall_total"])
     assert "onset_day" not in r["series"]                       # whole-forecast only
     assert c.get("/api/v1/countries/kenya/runs/latest/series/county/nowhere").status_code == 404
+
+
+def test_republished_run_is_picked_up(tmp_path, monkeypatch):
+    """A preview replaced by the full run for the same date (Oct 2026) must not be
+    served from cache, and its file URLs must change so browsers refetch."""
+    c = _period_client(tmp_path, monkeypatch, "preview")
+    monkeypatch.setenv("INDEX_TTL", "0")
+    from app.core.deps import reset_caches
+    from app.main import create_app
+    reset_caches()
+    c = TestClient(create_app())
+    v1 = c.get("/api/v1/countries/kenya/runs/latest").json()
+    assert v1["preview"] is True and "?v=" in next(iter(v1["layers"].values()))["cog_url"]
+    data = tmp_path / "data" / "kenya"
+    # the full run lands in the same folder
+    shutil.rmtree(data / "2026-10-01")
+    shutil.copytree(DEMO["full"] / "kenya" / "2026-10-01", data / "2026-10-01")
+    for f in ("runs.json", "latest.json"):
+        shutil.copy(DEMO["full"] / "kenya" / f, data / f)
+    import json as _j, time as _t
+    for f, k in (("runs.json", None), ("latest.json", "updated")):
+        d = _j.loads((data / f).read_text())
+        if k: d[k] = "2026-10-29T03:04:23+00:00"
+        else: d["runs"][0]["created"] = "2026-10-29T03:04:23+00:00"
+        (data / f).write_text(_j.dumps(d))
+    cat = _j.loads((data / "2026-10-01" / "catalog.json").read_text())
+    cat["created"] = "2026-10-29T03:04:23+00:00"
+    (data / "2026-10-01" / "catalog.json").write_text(_j.dumps(cat))
+    _t.sleep(0.01)
+    v2 = c.get("/api/v1/countries/kenya/runs/latest").json()
+    assert v2["preview"] is False and "rainfall_total" in v2["index"]
+    assert v2["version"] != v1["version"]
+    url = v2["areas"][0]["summary_urls"]["OND"]
+    r = c.get(url)
+    assert r.headers["cache-control"].endswith("immutable")
+    assert any(k.startswith("rainfall_total__OND") for k in r.json()["areas"][0]["values"])
+    unversioned = c.get("/api/v1/countries/kenya/runs/2026-10-01/areas/county?period=OND")
+    assert "immutable" not in unversioned.headers["cache-control"]

@@ -48,6 +48,7 @@ def area_summaries(response: Response, init: str = INIT_PARAM, level: str = LEVE
                    parent: Optional[str] = Query(None, description="Filter: only areas inside this parent id"),
                    format: Literal["json", "csv"] = Query("json", description="`csv` for a spreadsheet"),
                    lang: Optional[str] = LANG, period: Optional[str] = PERIOD,
+                   v: Optional[str] = Query(None, description="Run version from `summary_urls` (cache key)"),
                    p: Profile = Depends(get_profile), st: Store = Depends(get_store)):
     """Every area's value for every layer of one period: mean/min/max for continuous
     layers, majority class and class shares for categorical ones. Keys are layer ids
@@ -66,7 +67,7 @@ def area_summaries(response: Response, init: str = INIT_PARAM, level: str = LEVE
         return PlainTextResponse(body, media_type="text/csv", headers={
             "Content-Disposition": f'attachment; filename="{p.id}_{real}_{data["period"]}_{level}.csv"',
             "Cache-Control": "public, max-age=60" if init == "latest" else "public, max-age=86400"})
-    cache(response, init)
+    cache(response, init, versioned=bool(v))
     return data
 
 

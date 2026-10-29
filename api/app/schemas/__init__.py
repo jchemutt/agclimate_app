@@ -129,6 +129,7 @@ class RunView(BaseModel):
     grid: Optional[dict] = None
     terciles: Optional[dict] = Field(None, description="Baseline used for the tercile categories")
     preview: bool = Field(False, description="Published before all variables arrived (e.g. temperature only)")
+    version: Optional[str] = Field(None, description="Changes when the run is republished; used as `?v=` in file URLs")
     periods: list[Period] = []
     default_period: Optional[str] = None
     layers: dict[str, LayerInfo]

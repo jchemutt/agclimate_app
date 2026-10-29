@@ -62,6 +62,9 @@ def run_view(p: Profile, init: str, cat: dict, st: Store) -> dict:
     menu, periods (seasons, months, whole forecast), admin levels and links."""
     cat = normalise_catalog(cat)
     base = f"{API_V1}/countries/{p.id}"
+    from urllib.parse import quote
+    ver = quote(str(cat.get("created") or ""), safe="")   # changes when the run is republished
+    vq = f"v={ver}" if ver else ""
     layers, index = {}, {}
     for e in cat.get("layers", []):
         b, per = e.get("base", e["id"]), e.get("period", WHOLE)
@@ -77,7 +80,7 @@ def run_view(p: Profile, init: str, cat: dict, st: Store) -> dict:
             "id": e["id"], "base": b, "period": per, "type": e["type"], "units": e.get("units", ""),
             "title": ov.title if ov and ov.title else e["title"],
             "description": ov.description if ov and ov.description else (legend or {}).get("description"),
-            "cog_url": st.public_url(f"{p.id}/{init}/{e['cog']}"),
+            "cog_url": st.public_url(f"{p.id}/{init}/{e['cog']}") + (f"?{vq}" if vq else ""),
             "legend": legend,
             "advisories": {str(k): v for k, v in p.advisories.get(b, {}).items()} or None,
         }
@@ -108,14 +111,15 @@ def run_view(p: Profile, init: str, cat: dict, st: Store) -> dict:
     return {
         "country": p.id, "init": init, "season": p.season_for(init),
         "valid_from": cat.get("valid_from"), "valid_to": cat.get("valid_to"),
-        "members": cat.get("members"), "created": cat.get("created"), "preview": bool(cat.get("preview")),
+        "members": cat.get("members"), "created": cat.get("created"), "version": cat.get("created"),
+        "preview": bool(cat.get("preview")),
         "bbox": list(p.map.bbox) if p.map.bbox else cat.get("bbox"),
         "grid": cat.get("grid"), "terciles": cat.get("terciles"),
         "periods": periods, "default_period": default_period, "default_layers": prefs,
         "layers": layers, "index": index, "groups": groups, "default_layer": default_layer,
         "areas": [{"level": a["level"], "label": p.level_label(a["level"]), "count": a.get("count"),
-                   "summary_url": f"{base}/runs/{init}/areas/{a['level']}",
-                   "summary_urls": {pid: f"{base}/runs/{init}/areas/{a['level']}?period={pid}"
+                   "summary_url": f"{base}/runs/{init}/areas/{a['level']}" + (f"?{vq}" if vq else ""),
+                   "summary_urls": {pid: f"{base}/runs/{init}/areas/{a['level']}?period={pid}" + (f"&{vq}" if vq else "")
                                     for pid in a.get("summaries", {})},
                    "boundaries_url": f"{base}/boundaries/{a['level']}"} for a in areas],
         "point_query": "layers" in cat.get("data", {}),

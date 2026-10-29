@@ -10,13 +10,16 @@ Layout (written by agclimate-prep `publish`), relative to the store root:
     <country>/<init>/areas/<level>.json
     <country>/<init>/data/{layers,members,ensemble_indices}.nc
 
-Run folders never change once published, so they are cached on disk forever;
-the two index files are re-read after `index_ttl` seconds.
+Run folders are cached (memory and disk) until the run is republished: each time
+an index file is re-read (every `index_ttl` seconds) the run's `created` stamp is
+compared with the one recorded on disk, and a changed run is dropped from the
+cache. A preview replaced by the full run for the same date is picked up this way.
 """
 from __future__ import annotations
 
 import json
 import os
+import shutil
 import threading
 import time
 from pathlib import Path, PurePosixPath
@@ -42,6 +45,7 @@ class Store:
         self.s = settings
         self._lock = threading.Lock()
         self._json: dict[str, tuple[float, object]] = {}
+        self._versions: dict[str, str] = {}          # "<country>/<init>" -> created stamp
         if settings.data_dir:
             self.kind, self.root = "local", Path(settings.data_dir)
         elif settings.s3_bucket:
@@ -100,7 +104,40 @@ class Store:
         data = json.loads(self.path(key).read_text())
         with self._lock:
             self._json[key] = (time.time(), data)
+        if PurePosixPath(key).name in INDEX_FILES:
+            self._track_versions(key, data)
         return data
+
+    # ------------------------------------------------------------------ republished runs
+    def _track_versions(self, key: str, data) -> None:
+        country = PurePosixPath(key).parts[0]
+        stamps = {}
+        if isinstance(data, dict) and "runs" in data:
+            stamps = {r["init"]: r.get("created") for r in data["runs"] if r.get("init")}
+        elif isinstance(data, dict) and data.get("init"):
+            stamps = {data["init"]: data.get("updated")}
+        for init, stamp in stamps.items():
+            if stamp:
+                self._check_run(f"{country}/{init}", str(stamp))
+
+    def _check_run(self, run: str, stamp: str) -> None:
+        with self._lock:
+            if self._versions.get(run) == stamp:
+                return
+            marker = (self.root / run / ".version") if self.kind == "s3" else None
+            seen = self._versions.get(run) or (marker.read_text().strip() if marker and marker.is_file() else None)
+            if seen is not None and seen != stamp:
+                for k in [k for k in self._json if k.startswith(run + "/")]:
+                    del self._json[k]
+                if marker is not None:
+                    shutil.rmtree(self.root / run, ignore_errors=True)
+            self._versions[run] = stamp
+            if marker is not None:
+                marker.parent.mkdir(parents=True, exist_ok=True)
+                marker.write_text(stamp)
+
+    def run_version(self, country: str, init: str) -> str | None:
+        return self._versions.get(f"{country}/{init}")
 
     def public_url(self, key: str) -> str:
         """URL the browser uses for a layer file."""
